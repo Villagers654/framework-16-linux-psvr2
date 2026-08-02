@@ -1,0 +1,41 @@
+#!/usr/bin/bash
+set -u
+
+previous=unknown
+previous_controllers=0
+
+controller_count() {
+    local count=0 product file
+    for product in 0E45 0E46; do
+        for file in /sys/class/hidraw/hidraw*/device/uevent; do
+            [[ -r "$file" ]] || continue
+            if grep -Fq "HID_ID=0005:0000054C:0000${product}" "$file"; then
+                count=$((count + 1)); break
+            fi
+        done
+    done
+    printf '%s\n' "$count"
+}
+
+while true; do
+    if /usr/bin/lsusb -d 054c:0cde >/dev/null 2>&1; then current=connected; else current=disconnected; fi
+    if [[ "$current" != "$previous" ]]; then
+        if [[ "$current" == connected ]]; then
+            sleep 2
+            /usr/bin/lsusb -d 054c:0cde >/dev/null 2>&1 && psvr2-fossvr-start || true
+        elif systemctl --user is-active --quiet psvr2-fossvr.service; then
+            psvr2-fossvr-stop || true
+        fi
+        previous=$current
+        previous_controllers=$(controller_count)
+    elif [[ "$current" == connected ]]; then
+        controllers=$(controller_count)
+        if (( controllers > previous_controllers )) && systemctl --user is-active --quiet psvr2-fossvr.service; then
+            sleep 2
+            psvr2-fossvr-start || true
+            controllers=$(controller_count)
+        fi
+        previous_controllers=$controllers
+    fi
+    sleep 2
+done

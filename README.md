@@ -1,0 +1,143 @@
+# Framework 16 Linux PSVR2
+
+An opinionated, reproducible PSVR2 PCVR setup for Linux, developed and tested
+on a Framework Laptop 16 with the Radeon RX 7700S Expansion Bay GPU, Bazzite,
+GNOME Wayland, and Sony's PSVR2 PC adapter.
+
+The finished experience is deliberately console-like:
+
+1. Turn on the Sense controllers and headset in either order.
+2. Monado and WayVR start automatically.
+3. The headset opens directly to a filtered grid of installed Steam VR games.
+4. **PSVR2 Room Setup** is in that grid beside the games.
+5. Point, pull the trigger, and play.
+
+The tested default is **120 Hz** at Monado's **170% compositor scale**, which
+reports a distortion-corrected recommendation of **3400×3468 per eye** on this
+PSVR2. Per-game Steam resolution overrides remain available.
+
+> [!CAUTION]
+> This is a community Linux stack built around experimental software. It is
+> not supported by Sony, Valve, Framework, or the upstream projects. Read the
+> hardware labels below before applying kernel or GPU settings.
+
+## What is portable and what is machine-specific?
+
+| Component | Scope | Why |
+|---|---|---|
+| PSVR2 Toolkit + Ignition | **Linux PSVR2** | Runs Sony's SteamVR driver through Proton and exposes it to Linux VR runtimes. |
+| Supremium Monado + xrizer | **Linux PSVR2** | Supplies OpenXR and translates OpenVR games without relying on SteamVR's compositor. |
+| WayVR launcher patches | **Linux PSVR2** | Opens a VR-only game grid, launches explicit VR modes, and binds native Sense controls. |
+| `bluetooth.disable_ertm=1` | **Linux / controller-specific** | Compatibility workaround for Sense Bluetooth pairing; try without it first on current kernels. |
+| `amdgpu.dcdebugmask=0xc10` | **AMD-specific, experimental** | The exact setting used on the tested machine to stabilize direct-display/DRM behavior. Do not apply on Intel/NVIDIA. |
+| AMD VR power profile service | **AMD-specific** | Prevents between-frame dGPU downclocking and runtime suspend while PSVR2 is connected. |
+| RX 7700S Vulkan ID `1002:7480` | **Framework 16 RX 7700S-specific** | Forces rendering onto the GPU physically wired to the rear Expansion Bay DisplayPort. |
+| PCI address `0000:03:00.0` | **This tested Framework 16 only** | PCI addresses can differ. The installer detects yours; never copy this value blindly. |
+| `/usr/bin/bazzite-steam` and `rpm-ostree kargs` | **Bazzite-specific** | Other distributions should use their native Steam package and bootloader tooling. |
+| GNOME Wayland | **Tested desktop** | The Monado path avoids SteamVR's unreliable GNOME DRM-lease path. WayVR uses PipeWire for the desktop. |
+
+## Hardware assumptions
+
+- Framework Laptop 16 (AMD 7040 generation tested)
+- Radeon RX 7700S Expansion Bay GPU
+- Sony PlayStation VR2 PC adapter with its power supply
+- DisplayPort connected to the **rear dGPU output**, not a side Expansion Card
+- USB from the Sony adapter connected to any functioning Framework USB-A path
+- PSVR2 Sense controllers paired over Bluetooth
+
+Framework's side Expansion Card display outputs are normally routed through the
+iGPU. The rear USB-C/DisplayPort output on the RX 7700S Expansion Bay is the
+important part of this configuration.
+
+## Quick start
+
+First install Steam, **SteamVR**, **PlayStation VR2 App**, Envision, Git, Rust,
+build tools, `jq`, `curl`, `unzip`, `bluez`, PipeWire tools, Vulkan tools, and
+Homebrew. `wmctrl` and ImageMagick provide the controller screenshot shortcut.
+On Bazzite, see [docs/BAZZITE.md](docs/BAZZITE.md) before continuing.
+
+```bash
+git clone https://github.com/Villagers654/framework-16-linux-psvr2.git
+cd framework-16-linux-psvr2
+./install.sh --user --framework16-rx7700s
+./scripts/fetch-community-tools.sh
+./scripts/install-room-setup-binding.sh
+./scripts/prepare-envision-runtime.sh
+./scripts/build-wayvr.sh
+sudo ./install.sh --system --framework16-rx7700s
+```
+
+Then:
+
+1. Open Envision.
+2. Select **PSVR2 Toolkit – 120 Hz / 1.7x**.
+3. Choose **Clean Build** once.
+4. Run `./scripts/verify.sh`.
+5. Reboot if you installed optional kernel arguments.
+
+The installer never overwrites an existing settings file. Review it here:
+
+```bash
+$EDITOR ~/.config/psvr2-linux/settings.env
+```
+
+For the exact from-scratch sequence, including Steam app preparation and
+controller pairing, read [docs/SETUP.md](docs/SETUP.md).
+
+## Everyday use
+
+- Power on/connect PSVR2: the runtime and game launcher start automatically.
+- Turn controllers on afterward: the monitor detects them and refreshes Monado.
+- Press either PS button: show or hide the WayVR dashboard.
+- Hold either PS button, then pull either trigger: save the VR mirror to
+  `~/Pictures/VR Screenshots/`.
+- Select **Games**: only detected Steam VR titles are listed.
+- Select **PSVR2 Room Setup**: run full room-scale calibration from the headset.
+- Select **Applications**: launch desktop applications or view the GNOME desktop.
+- Stop VR: launch **Stop PSVR2 (Monado)** from GNOME or run `psvr2-fossvr-stop`.
+- Manual start: launch **PSVR2 (Monado + WayVR)** or run `psvr2-fossvr-start`.
+
+If you manually stop VR while the headset remains connected, the USB monitor
+does not immediately fight you and restart it. Power-cycle the headset or use
+the manual launcher when you want VR again.
+
+## Repository layout
+
+- `bin/` – portable versions of every helper used by the working setup
+- `systemd/user/` – Monado, WayVR, maintenance, and USB monitor user units
+- `systemd/system/` – optional AMD dGPU power guard
+- `udev/` – PSVR2 permissions and conditional AMD power hooks
+- `patches/` – exact Monado, xrizer, and WayVR source changes
+- `config/` – settings and Envision/WayVR configuration templates
+- `desktop/` – GNOME application launchers
+- `scripts/` – downloads, source preparation, build, and verification
+- `docs/` – full setup, architecture, platform-specific notes, and troubleshooting
+
+## Pinned, tested versions
+
+| Project | Version/commit |
+|---|---|
+| PSVR2 Toolkit | `v1.0.0-experimental-1` (`PSVR2TK-win64-Ignition.zip`) |
+| Ignition | `v1.0.0` |
+| PSVR2Toolkit.UnitySetup | `v1.0.0` |
+| SteamVRLinuxFixes | `v0.1.4` |
+| Supremium Monado branch | `psvr2-linux-steam-lh` at `8bd01e7edec8028f65c7bff925195f0454d4bc9f` |
+| xrizer | `6c3e45f4c18b014a7aba87282ee0677306315052` |
+| WayVR | `5723c3c1df31b332a54f59161762d41dd3bd4ff2` (26.2.1) |
+
+See [docs/UPSTREAM.md](docs/UPSTREAM.md) for links, licenses, and what each
+project contributes.
+
+## Security and redistribution
+
+This repository intentionally does **not** contain:
+
+- Sony or Steam binaries
+- Bnuuy release binaries
+- a Wine/Proton prefix
+- Steam account data or application manifests
+- Bluetooth MAC addresses
+- eye, room, or lens calibration data
+
+The download script fetches public release assets from their upstream project
+pages. Source patches are provided so the custom binaries can be rebuilt.

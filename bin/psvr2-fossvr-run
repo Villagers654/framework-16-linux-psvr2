@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+[[ $# -gt 0 ]] || { echo "Usage: psvr2-fossvr-run PROGRAM [ARG ...]" >&2; exit 2; }
+
+if ! systemctl --user is-active --quiet psvr2-fossvr.service ||
+   ! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then
+    psvr2-fossvr-start
+fi
+
+export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
+export VR_OVERRIDE="$ENVISION_PROFILE_ROOT/xrizer/target/release"
+export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
+export PRESSURE_VESSEL_FILESYSTEMS_RW="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc${PRESSURE_VESSEL_FILESYSTEMS_RW:+:$PRESSURE_VESSEL_FILESYSTEMS_RW}"
+exec "$@"

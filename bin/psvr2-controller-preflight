@@ -1,0 +1,29 @@
+#!/usr/bin/bash
+set -u
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+
+bluetoothctl_bin=$(command -v bluetoothctl 2>/dev/null || true)
+[[ -n "$bluetoothctl_bin" ]] || exit 0
+
+hid_present() {
+    local product=$1 file
+    for file in /sys/class/hidraw/hidraw*/device/uevent; do
+        [[ -r "$file" ]] || continue
+        grep -Fq "HID_ID=0005:0000054C:0000${product}" "$file" && return 0
+    done
+    return 1
+}
+
+repair() {
+    local address=$1 product=$2 info
+    [[ -n "$address" ]] || return 0
+    info=$($bluetoothctl_bin info "$address" 2>/dev/null) || return 0
+    grep -Fq 'Connected: yes' <<<"$info" || return 0
+    hid_present "$product" && return 0
+    $bluetoothctl_bin disconnect "$address" >/dev/null 2>&1 || true
+    sleep 1
+    $bluetoothctl_bin connect "$address" >/dev/null 2>&1 || true
+}
+
+repair "$CONTROLLER_LEFT_MAC" 0E45
+repair "$CONTROLLER_RIGHT_MAC" 0E46

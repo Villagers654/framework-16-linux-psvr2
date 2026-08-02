@@ -1,0 +1,12 @@
+[Unit]
+Description=Start the PSVR2 menu when the headset is connected
+After=graphical-session.target bluetooth.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/psvr2-autostart-monitor
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

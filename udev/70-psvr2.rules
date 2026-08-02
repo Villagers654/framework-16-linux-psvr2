@@ -1,0 +1,6 @@
+# PSVR2 PC adapter and Sense controllers (USB/Bluetooth)
+ATTRS{idVendor}=="054c", ATTRS{idProduct}=="0cde", TAG+="uaccess", ENV{ID_xrhardware}="1"
+ATTRS{idVendor}=="054c", ATTRS{idProduct}=="0e45", TAG+="uaccess", ENV{ID_xrhardware}="1"
+ATTRS{idVendor}=="054c", ATTRS{idProduct}=="0e46", TAG+="uaccess", ENV{ID_xrhardware}="1"
+KERNELS=="0005:054C:0E45.*", TAG+="uaccess", ENV{ID_xrhardware}="1"
+KERNELS=="0005:054C:0E46.*", TAG+="uaccess", ENV{ID_xrhardware}="1"

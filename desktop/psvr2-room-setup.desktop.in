@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PSVR2 Room Setup
+Comment=Configure a room-scale PSVR2 boundary
+Exec=@HOME@/.local/bin/psvr2-room-setup
+Icon=preferences-desktop-display
+Terminal=false
+Categories=Game;

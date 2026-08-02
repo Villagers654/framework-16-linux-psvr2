@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Stop PSVR2 (Monado)
+Exec=@HOME@/.local/bin/psvr2-fossvr-stop
+Icon=process-stop
+Terminal=true
+Categories=Game;

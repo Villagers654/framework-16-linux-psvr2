@@ -1,0 +1,13 @@
+[Unit]
+Description=WayVR dashboard for the PSVR2 Monado runtime
+Documentation=https://wiki.vronlinux.org/docs/fossvr/wayvr/
+Requires=psvr2-fossvr.service
+After=psvr2-fossvr.service
+PartOf=psvr2-fossvr.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/psvr2-wayvr --openxr --show --replace
+Restart=always
+RestartSec=2
+TimeoutStopSec=5

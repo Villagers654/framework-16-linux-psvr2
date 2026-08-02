@@ -1,0 +1,10 @@
+[Unit]
+Description=Repair PSVR2 SteamVR integration after SteamVR updates
+
+[Path]
+PathChanged=%h/.local/share/Steam/steamapps/common/SteamVR/bin/vrstartup.sh
+PathChanged=%h/.local/share/Steam/steamapps/common/SteamVR/bin/linux64/vrcompositor-launcher.sh
+Unit=psvr2-steamvr-maintenance.service
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,219 @@
+diff --git a/dash-frontend/src/frontend.rs b/dash-frontend/src/frontend.rs
+index 192cbc06..b3efa26e 100644
+--- a/dash-frontend/src/frontend.rs
++++ b/dash-frontend/src/frontend.rs
+@@ -151,7 +151,9 @@ impl<T: 'static> Frontend<T> {
+ 		let toast_manager = ToastManager::new();
+ 
+ 		let tasks = FrontendTasks::new();
+-		tasks.push(FrontendTask::SetTab(TabType::Home));
++		// This PSVR2 dashboard is primarily a headset launcher.  Land directly
++		// on the filtered VR library; Home and Applications remain in the nav.
++		tasks.push(FrontendTask::SetTab(TabType::Games));
+ 
+ 		let id_label_time = state.get_widget_id("label_time")?;
+ 		let id_rect_content = state.get_widget_id("rect_content")?;
+diff --git a/dash-frontend/src/util/steam_utils.rs b/dash-frontend/src/util/steam_utils.rs
+index 3c7faa3a..2d69d40e 100644
+--- a/dash-frontend/src/util/steam_utils.rs
++++ b/dash-frontend/src/util/steam_utils.rs
+@@ -1,5 +1,6 @@
+ use keyvalues_parser::{Obj, Vdf};
+ use serde::{Deserialize, Serialize};
++use std::collections::HashMap;
+ use std::path::PathBuf;
+ 
+ #[derive(Clone)]
+@@ -24,6 +25,11 @@ fn get_steam_root() -> anyhow::Result<PathBuf> {
+ 
+ pub type AppID = String;
+ 
++// Reserved local launcher ID. This is deliberately outside Steam's assigned
++// range and is handled below without creating a fake appmanifest or a
++// per-account non-Steam shortcut.
++const PSVR2_ROOM_SETUP_APP_ID: &str = "2147483001";
++
+ #[derive(Clone, Debug, Serialize, Deserialize)]
+ pub struct AppManifest {
+ 	pub app_id: AppID,
+@@ -125,7 +131,14 @@ struct AppEntry {
+ 
+ pub fn launch(app_id: &AppID) -> anyhow::Result<()> {
+ 	log::info!("Launching Steam game with AppID {}", app_id);
+-	call_steam(&format!("steam://rungameid/{}", app_id))?;
++	if app_id == PSVR2_ROOM_SETUP_APP_ID {
++		let launcher = PathBuf::from(std::env::var("HOME")?).join(".local/bin/psvr2-room-setup");
++		std::process::Command::new(launcher).spawn()?;
++		return Ok(());
++	}
++	// This build is the PSVR2 dashboard.  Explicit VR launch context prevents
++	// hybrid games from silently selecting their flat-screen definition.
++	call_steam(&format!("steam://launch/{}/vr", app_id))?;
+ 	Ok(())
+ }
+ 
+@@ -284,6 +297,28 @@ impl SteamUtils {
+ 			})
+ 			.collect();
+ 
++		// The PSVR2 Steam synchronizer maintains this classification cache from
++		// Steam Store metadata.  Keep runtimes, tools, and flat games out of the
++		// in-headset Games tab; if the cache is unavailable, retain upstream's
++		// normal unfiltered behavior.
++		let vr_cache_path = PathBuf::from(std::env::var("HOME")?)
++			.join(".local/share/psvr2-setup/steam-vr-apps.json");
++		if let Ok(raw) = std::fs::read_to_string(vr_cache_path)
++			&& let Ok(vr_apps) = serde_json::from_str::<HashMap<AppID, bool>>(&raw)
++		{
++			games.retain(|game| vr_apps.get(&game.app_id).copied().unwrap_or(false));
++		}
++
++		// Keep room/boundary calibration beside games so it is always reachable
++		// from inside the headset, even before Steam is signed in.
++		games.push(AppManifest {
++			app_id: PSVR2_ROOM_SETUP_APP_ID.into(),
++			run_game_id: PSVR2_ROOM_SETUP_APP_ID.into(),
++			name: "PSVR2 Room Setup".into(),
++			raw_state_flags: 4,
++			last_played: None,
++		});
++
+ 		match sort_method {
+ 			GameSortMethod::None => {}
+ 			GameSortMethod::NameAsc => {
+diff --git a/wayvr/src/backend/openxr/helpers.rs b/wayvr/src/backend/openxr/helpers.rs
+index 0f9b352f..34515f0e 100644
+--- a/wayvr/src/backend/openxr/helpers.rs
++++ b/wayvr/src/backend/openxr/helpers.rs
+@@ -72,11 +72,21 @@ pub(super) fn init_xr() -> Result<(xr::Instance, xr::SystemId), anyhow::Error> {
+         log::warn!("Missing XR_KHR_composition_layer_color_scale_bias extension.");
+     }
+ 
+-    let xr_mndx_system_buttons = b"XR_MNDX_system_buttons".to_vec();
++    // openxr-rs stores unknown extension names with their terminating NUL.
++    let xr_mndx_system_buttons = b"XR_MNDX_system_buttons\0".to_vec();
+     if available_extensions.other.contains(&xr_mndx_system_buttons) {
+         enabled_extensions.other.push(xr_mndx_system_buttons);
+     }
+ 
++    // Monado's PSVR2 driver exposes the Sense controllers through this
++    // preview interaction extension.  Enable it when present so WayVR can
++    // bind the real PS/Cross/Circle/Square/Triangle paths instead of relying
++    // on Oculus compatibility bindings.
++    let xr_mndx_psvr2_interaction = b"XR_MNDX_psvr2_interaction\0".to_vec();
++    if available_extensions.other.contains(&xr_mndx_psvr2_interaction) {
++        enabled_extensions.other.push(xr_mndx_psvr2_interaction);
++    }
++
+     //#[cfg(not(debug_assertions))]
+     let layers = [];
+     //#[cfg(debug_assertions)]
+diff --git a/wayvr/src/backend/openxr/mod.rs b/wayvr/src/backend/openxr/mod.rs
+index ceecfc74..34957555 100644
+--- a/wayvr/src/backend/openxr/mod.rs
++++ b/wayvr/src/backend/openxr/mod.rs
+@@ -80,6 +80,13 @@ pub fn openxr_run(
+             TaskType::Overlay(OverlayTask::ShowHide),
+             Instant::now().add(Duration::from_secs(1)),
+         );
++
++		// The PSVR2's startup destination is the game/application menu, not an
++		// empty home scene.  The watch remains available for reopening it later.
++		app.tasks.enqueue_at(
++			TaskType::Overlay(OverlayTask::ToggleDashboard),
++			Instant::now().add(Duration::from_millis(1400)),
++		);
+     }
+ 
+     let mut overlays = OverlayWindowManager::<OpenXrOverlayData>::new(&mut app, headless)?;
+@@ -281,7 +288,25 @@ pub fn openxr_run(
+             blocker.update(&mut app);
+         }
+ 
+-        if app
++        let ps_button_held = app
++            .input_state
++            .pointers
++            .iter()
++            .any(|p| p.now.toggle_dashboard);
++        let trigger_held = app.input_state.pointers.iter().any(|p| p.now.click);
++        let screenshot_chord_started = ps_button_held
++            && trigger_held
++            && app.input_state.pointers.iter().any(|p| {
++                (p.now.toggle_dashboard && !p.before.toggle_dashboard)
++                    || (p.now.click && !p.before.click)
++            });
++
++        if screenshot_chord_started {
++            log::info!("PSVR2 screenshot chord pressed");
++            if let Err(e) = std::process::Command::new("psvr2-screenshot").spawn() {
++                log::error!("Could not launch PSVR2 screenshot helper: {e}");
++            }
++        } else if app
+             .input_state
+             .pointers
+             .iter()
+@@ -290,7 +315,8 @@ pub fn openxr_run(
+             overlays.show_hide(&mut app);
+         }
+ 
+-        if app
++        if !screenshot_chord_started
++            && app
+             .input_state
+             .pointers
+             .iter()
+diff --git a/wayvr/src/backend/openxr/openxr_actions.json5 b/wayvr/src/backend/openxr/openxr_actions.json5
+index c0950db7..76c5eaec 100644
+--- a/wayvr/src/backend/openxr/openxr_actions.json5
++++ b/wayvr/src/backend/openxr/openxr_actions.json5
+@@ -76,6 +76,49 @@
+   //  }
+   //},
+ 
++  // PlayStation VR2 Sense Controller (Monado XR_MNDX_psvr2_interaction)
++  {
++    profile: "/interaction_profiles/mndx/pssense_controller_mndx",
++    pose: {
++      left: "/user/hand/left/input/aim/pose",
++      right: "/user/hand/right/input/aim/pose"
++    },
++    haptic: {
++      left: "/user/hand/left/output/haptic",
++      right: "/user/hand/right/output/haptic"
++    },
++    click: {
++      left: "/user/hand/left/input/trigger/value",
++      right: "/user/hand/right/input/trigger/value"
++    },
++    grab: {
++      left: "/user/hand/left/input/squeeze/click",
++      right: "/user/hand/right/input/squeeze/click"
++    },
++    scroll: {
++      left: "/user/hand/left/input/thumbstick/y",
++      right: "/user/hand/right/input/thumbstick/y"
++    },
++    scroll_horizontal: {
++      left: "/user/hand/left/input/thumbstick/x",
++      right: "/user/hand/right/input/thumbstick/x"
++    },
++    toggle_dashboard: {
++      left: "/user/hand/left/input/system/click",
++      right: "/user/hand/right/input/system/click"
++    },
++    show_hide: {
++      double_click: true,
++      left: "/user/hand/left/input/triangle_mndx/click"
++    },
++    click_modifier_right: {
++      right: "/user/hand/right/input/circle_mndx/touch"
++    },
++    click_modifier_middle: {
++      right: "/user/hand/right/input/cross_mndx/touch"
++    }
++  },
++
+   // Oculus Touch Controller. Compatible with Quest 2, Quest 3, Quest Pro
+   {
+     profile: "/interaction_profiles/oculus/touch_controller",

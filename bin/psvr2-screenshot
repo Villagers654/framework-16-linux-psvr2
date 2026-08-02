@@ -1,0 +1,35 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+command -v wmctrl >/dev/null || { echo "wmctrl is required" >&2; exit 1; }
+command -v import >/dev/null || { echo "ImageMagick 'import' is required" >&2; exit 1; }
+
+output_dir="${XDG_PICTURES_DIR:-$HOME/Pictures}/VR Screenshots"
+mkdir -p "$output_dir"
+timestamp=$(date +%Y-%m-%d_%H-%M-%S)
+output="$output_dir/PSVR2-$timestamp.png"
+
+# Prefer the PSVR2 utility; otherwise choose the largest visible XWayland
+# application window that is not Steam, WayVR, or the desktop shell. Proton
+# VR games are XWayland applications in the tested Bazzite configuration.
+window=$(wmctrl -lGpx | awk '
+  BEGIN { best=0; id="" }
+  {
+    area=$5*$6; class=tolower($8); title="";
+    for (i=10; i<=NF; i++) title=title (i==10 ? "" : " ") $i;
+    low=tolower(title);
+    if (low ~ /psvr2toolkit\.unitysetup/) { print $1; exit }
+    if (class ~ /(steam|wayvr|gnome-shell|codex-desktop)/) next;
+    if (low ~ /^(steam|chatgpt)$/) next;
+    if (area > best) { best=area; id=$1 }
+  }
+  END { if (id != "") print id }
+' | head -n1)
+
+if [[ -z "$window" ]]; then
+    window=$(xdotool getactivewindow)
+fi
+
+import -silent -window "$window" "$output"
+notify-send -a PSVR2 -i camera-photo "VR screenshot saved" "$output" 2>/dev/null || true
+printf '%s\n' "$output"

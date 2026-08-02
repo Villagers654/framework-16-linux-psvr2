@@ -1,0 +1,46 @@
+{
+  "uuid": "psvr2-toolkit-monado",
+  "name": "PSVR2 Toolkit - 120 Hz / 1.7x",
+  "xrservice_type": "Monado",
+  "xrservice_path": "@HOME@/.local/share/envision/psvr2-toolkit-monado/xrservice",
+  "xrservice_repo": "https://gitlab.freedesktop.org/Supremium/monado",
+  "xrservice_branch": "psvr2-linux-steam-lh",
+  "xrservice_cmake_flags": {
+    "XRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE": "ON",
+    "XRT_BUILD_DRIVER_PSVR2": "OFF",
+    "XRT_BUILD_DRIVER_PSSENSE": "OFF"
+  },
+  "opencomposite_path": "@HOME@/.local/share/envision/psvr2-toolkit-monado/opencomposite",
+  "opencomposite_repo": null,
+  "opencomposite_branch": null,
+  "ovr_comp": {
+    "mod_type": "Xrizer",
+    "repo": "https://github.com/Supreeeme/xrizer",
+    "branch": "main",
+    "path": "@HOME@/.local/share/envision/psvr2-toolkit-monado/xrizer"
+  },
+  "features": {
+    "libsurvive": {"feature_type":"Libsurvive","enabled":false,"path":"@HOME@/.local/share/envision/psvr2-toolkit-monado/libsurvive","repo":null,"branch":null},
+    "basalt": {"feature_type":"Basalt","enabled":false,"path":"@HOME@/.local/share/envision/psvr2-toolkit-monado/basalt","repo":null,"branch":null},
+    "openhmd": {"feature_type":"OpenHmd","enabled":false,"path":"@HOME@/.local/share/envision/psvr2-toolkit-monado/openhmd","repo":null,"branch":null},
+    "mercury_enabled": false
+  },
+  "environment": {
+    "XRT_DEBUG_GUI": "0",
+    "XRT_CURATED_GUI": "0",
+    "LH_LOAD_PSVR2": "1",
+    "DRI_PRIME": "@DRI_PRIME@",
+    "XRT_COMPOSITOR_COMPUTE": "1",
+    "XRT_COMPOSITOR_FORCE_VK_DISPLAY": "0",
+    "XRT_COMP_FRAME_LAG_LOG_AS_LEVEL": "debug",
+    "U_PACING_APP_USE_MIN_FRAME_PERIOD": "1",
+    "XRT_COMPOSITOR_SCALE_PERCENTAGE": "170"
+  },
+  "prefix": "@HOME@/.local/share/envision/prefixes/psvr2-toolkit-monado",
+  "is_system_profile": false,
+  "editable": true,
+  "pull_on_build": false,
+  "lighthouse_driver": "Vive",
+  "xrservice_launch_options": "",
+  "skip_dependency_check": true
+}

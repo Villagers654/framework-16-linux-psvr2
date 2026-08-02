@@ -1,0 +1,24 @@
+#!/usr/bin/bash
+set -u
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+
+systemctl --user stop psvr2-fossvr-wayvr.service psvr2-fossvr.service \
+    monado.socket monado.service 2>/dev/null || true
+
+prefix="$PSVR2_SETUP_ROOT/ignition-prefix/pfx"
+wineserver="$STEAM_ROOT/steamapps/common/Proton - Experimental/files/bin/wineserver"
+if [[ -x "$wineserver" && -d "$prefix" ]]; then
+    WINEPREFIX="$prefix" "$wineserver" -k 2>/dev/null || true
+fi
+
+for _ in $(seq 1 30); do
+    stale=false
+    for proc in /proc/[0-9]*/cmdline; do
+        [[ -r "$proc" ]] || continue
+        if tr '\0' ' ' <"$proc" 2>/dev/null | grep -Fq '/psvr2-setup/ignition/ignition_server.exe'; then
+            stale=true; break
+        fi
+    done
+    $stale || exit 0
+    sleep 0.1
+done

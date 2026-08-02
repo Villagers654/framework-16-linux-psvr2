@@ -1,0 +1,38 @@
+#!/usr/bin/bash
+set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+
+steam -shutdown-vr >/dev/null 2>&1 || true
+for _ in $(seq 1 50); do
+    pgrep -f '/SteamVR/bin/linux64/(vrserver|vrcompositor)' >/dev/null || break
+    sleep 0.1
+done
+pkill -TERM -f '/SteamVR/bin/linux64/vrcompositor' 2>/dev/null || true
+pkill -TERM -f '/SteamVR/bin/linux64/vrserver' 2>/dev/null || true
+
+systemctl --user stop monado.socket monado.service 2>/dev/null || true
+psvr2-runtime-preflight || true
+psvr2-controller-preflight || true
+systemctl --user reset-failed psvr2-fossvr.service psvr2-fossvr-wayvr.service 2>/dev/null || true
+
+socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc"
+[[ ! -S "$socket" ]] || unlink "$socket"
+systemctl --user start psvr2-fossvr.service
+
+for _ in $(seq 1 100); do
+    [[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket" && break
+    if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
+        journalctl --user -u psvr2-fossvr.service -n 60 --no-pager >&2
+        exit 1
+    fi
+    sleep 0.1
+done
+[[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket" || { echo "Monado IPC socket was not created" >&2; exit 1; }
+
+systemctl --user start psvr2-fossvr-wayvr.service
+sleep 1
+systemctl --user is-active --quiet psvr2-fossvr-wayvr.service || {
+    journalctl --user -u psvr2-fossvr-wayvr.service -n 60 --no-pager >&2; exit 1;
+}
+psvr2-audio vr || true
+echo "PSVR2 ready: ${PSVR2_REFRESH_RATE} Hz / ${PSVR2_RENDER_SCALE}% + WayVR."

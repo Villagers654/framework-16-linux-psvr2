@@ -1,0 +1,28 @@
+#!/usr/bin/bash
+set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+
+state_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-audio-restore"
+
+node_id() {
+    local escaped=${1//./\.}
+    wpctl status -n | sed -n "s/.*[^0-9]\([0-9][0-9]*\)\. ${escaped}[[:space:]].*/\1/p" | head -n 1
+}
+
+case "${1:-}" in
+    vr)
+        wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null |
+            sed -n 's/^[[:space:]]*\*\{0,1\}[[:space:]]*node.name = "\([^"]*\)"/\1/p' |
+            head -n 1 > "$state_file"
+        [[ -z "$VR_AUDIO_SINK" ]] || { id=$(node_id "$VR_AUDIO_SINK" || true); [[ -z "$id" ]] || wpctl set-default "$id"; }
+        [[ -z "$VR_AUDIO_SOURCE" ]] || { id=$(node_id "$VR_AUDIO_SOURCE" || true); [[ -z "$id" ]] || wpctl set-default "$id"; }
+        ;;
+    restore)
+        if [[ -s "$state_file" ]]; then
+            read -r previous < "$state_file"
+            id=$(node_id "$previous" || true)
+            [[ -z "$id" ]] || wpctl set-default "$id"
+        fi
+        ;;
+    *) echo "Usage: psvr2-audio {vr|restore}" >&2; exit 2 ;;
+esac

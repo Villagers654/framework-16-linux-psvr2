@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+unset APPIMAGE APPDIR ARGV0 OWD LD_PRELOAD
+brew_prefix=$(brew --prefix 2>/dev/null || true)
+if [[ -n "$brew_prefix" ]]; then
+    export LD_LIBRARY_PATH="$brew_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+exec "$PSVR2_SETUP_ROOT/wayvr/wayvr" "$@"

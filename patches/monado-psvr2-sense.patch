@@ -1,0 +1,30 @@
+diff --git a/src/xrt/drivers/steamvr_lh/device.cpp b/src/xrt/drivers/steamvr_lh/device.cpp
+index df99d97..e425663 100644
+--- a/src/xrt/drivers/steamvr_lh/device.cpp
++++ b/src/xrt/drivers/steamvr_lh/device.cpp
+@@ -778,6 +778,13 @@ ControllerDevice::set_haptic_handle(vr::VRInputComponentHandle_t handle)
+ 		name = XRT_OUTPUT_NAME_VIVE_TRACKER_HAPTIC;
+ 		break;
+ 	}
++	case XRT_DEVICE_TOUCH_CONTROLLER: {
++		// PSVR2 Sense controllers are intentionally exposed through Monado's
++		// Oculus Touch compatibility profile. The Sony driver still receives
++		// the OpenVR haptic event below, including duration/frequency/amplitude.
++		name = XRT_OUTPUT_NAME_TOUCH_HAPTIC;
++		break;
++	}
+ 	default: {
+ 		DEV_WARN("Unknown device name (%u), haptics will not work", this->name);
+ 		//return;
+@@ -1567,6 +1574,11 @@ ControllerDevice::handle_property_write(const vr::PropertyWrite_t &prop)
+ 	case vr::Prop_InputProfilePath_String: {
+ 		std::string_view profile =
+ 		    parse_profile(std::string_view(static_cast<char *>(prop.pvBuffer), prop.unBufferSize));
++		// The Toolkit reports one generic profile after the serial-specific
++		// left/right compatibility class has already been selected above.
++		if (profile == "playstation_vr2_sense_controller" && input_class != nullptr) {
++			break;
++		}
+ 		auto input_class = controller_classes.find(profile);
+ 		if (input_class == controller_classes.end()) {
+ 			DEV_ERR("Could not find input class for controller profile %s", std::string(profile).c_str());

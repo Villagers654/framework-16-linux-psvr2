@@ -1,0 +1,30 @@
+diff --git a/src/openxr_data.rs b/src/openxr_data.rs
+index 9511cc8..88b7d6c 100644
+--- a/src/openxr_data.rs
++++ b/src/openxr_data.rs
+@@ -8,6 +8,7 @@ use log::{info, warn};
+ use openvr as vr;
+ use openxr as xr;
+ use std::mem::ManuallyDrop;
++use std::path::Path;
+ use std::sync::{
+     RwLock,
+     atomic::{AtomicI64, Ordering},
+@@ -111,8 +112,15 @@ impl<C: Compositor> OpenXrData<C> {
+         let entry = xr::Entry::linked();
+ 
+         #[cfg(all(not(test), not(feature = "static-openxr")))]
+-        let entry = unsafe { xr::Entry::load() }
+-            .expect("Failed to load OpenXR loader — is libopenxr-loader installed?");
++        // Fedora/Bazzite's runtime package intentionally ships the loader by
++        // its SONAME (libopenxr_loader.so.1) without the unversioned symlink
++        // from the -devel package. Try the portable name first, then the
++        // standard Linux SONAME used by packaged applications.
++        let entry = unsafe {
++            xr::Entry::load()
++                .or_else(|_| xr::Entry::load_from(Path::new("libopenxr_loader.so.1")))
++        }
++        .expect("Failed to load OpenXR loader — is libopenxr-loader installed?");
+ 
+         #[cfg(test)]
+         let entry =

@@ -1,0 +1,22 @@
+#!/usr/bin/bash
+set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+
+export LH_LOAD_PSVR2=1
+export LH_DISCOVER_WAIT_MS=5000
+export XRT_COMPOSITOR_SCALE_PERCENTAGE="$PSVR2_RENDER_SCALE"
+export XRT_COMPOSITOR_COMPUTE=1
+export XRT_COMPOSITOR_FORCE_VK_DISPLAY=0
+export XRT_COMP_FRAME_LAG_LOG_AS_LEVEL=debug
+export U_PACING_APP_USE_MIN_FRAME_PERIOD=1
+export XRT_DEBUG_GUI=0 XRT_CURATED_GUI=0 XRT_NO_STDIN=1
+export IPC_EXIT_ON_DISCONNECT=OFF
+if [[ -n "$AMD_VULKAN_DEVICE" ]]; then
+    export MESA_VK_DEVICE_SELECT="${AMD_VULKAN_DEVICE}!"
+    export MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE=1
+fi
+if [[ -n "$DGPU_PCI_ADDRESS" ]]; then
+    export DRI_PRIME="pci-${DGPU_PCI_ADDRESS//:/_}"
+    export DRI_PRIME="${DRI_PRIME//./_}"
+fi
+exec "$MONADO_PREFIX/bin/monado-service"

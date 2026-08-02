@@ -1,0 +1,9 @@
+build/
+downloads/
+*.zip
+*.so
+*.dll
+*.exe
+settings.env
+steam-vr-apps.json
+__pycache__/

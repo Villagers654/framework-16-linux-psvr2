@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+export XRIZER_FORCE_HEADSET_ON_HEAD=1
+exec psvr2-fossvr-run "$PSVR2_SETUP_ROOT/unity-setup/PSVR2Toolkit.UnitySetup.x86_64"

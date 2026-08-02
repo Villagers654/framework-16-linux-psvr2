@@ -1,0 +1,24 @@
+#!/usr/bin/bash
+
+config_file="${PSVR2_CONFIG:-$HOME/.config/psvr2-linux/settings.env}"
+if [[ -r "$config_file" ]]; then
+    # shellcheck disable=SC1090
+    source "$config_file"
+fi
+
+PSVR2_RENDER_SCALE="${PSVR2_RENDER_SCALE:-170}"
+PSVR2_REFRESH_RATE="${PSVR2_REFRESH_RATE:-120}"
+STEAM_ROOT="${STEAM_ROOT:-$HOME/.local/share/Steam}"
+ENVISION_PROFILE_ROOT="${ENVISION_PROFILE_ROOT:-$HOME/.local/share/envision/psvr2-toolkit-monado}"
+MONADO_PREFIX="${MONADO_PREFIX:-$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado}"
+PSVR2_SETUP_ROOT="${PSVR2_SETUP_ROOT:-$HOME/.local/share/psvr2-setup}"
+AMD_VULKAN_DEVICE="${AMD_VULKAN_DEVICE:-}"
+DGPU_PCI_ADDRESS="${DGPU_PCI_ADDRESS:-}"
+VR_AUDIO_SINK="${VR_AUDIO_SINK:-}"
+VR_AUDIO_SOURCE="${VR_AUDIO_SOURCE:-}"
+CONTROLLER_LEFT_MAC="${CONTROLLER_LEFT_MAC:-}"
+CONTROLLER_RIGHT_MAC="${CONTROLLER_RIGHT_MAC:-}"
+STEAM_COMMAND="${STEAM_COMMAND:-steam}"
+
+export PSVR2_RENDER_SCALE PSVR2_REFRESH_RATE STEAM_ROOT ENVISION_PROFILE_ROOT
+export MONADO_PREFIX PSVR2_SETUP_ROOT AMD_VULKAN_DEVICE DGPU_PCI_ADDRESS

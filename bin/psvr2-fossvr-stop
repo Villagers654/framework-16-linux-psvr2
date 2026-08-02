@@ -1,0 +1,6 @@
+#!/usr/bin/bash
+set -euo pipefail
+systemctl --user stop psvr2-fossvr-wayvr.service psvr2-fossvr.service
+psvr2-runtime-preflight || true
+psvr2-audio restore || true
+echo "PSVR2 runtime stopped."

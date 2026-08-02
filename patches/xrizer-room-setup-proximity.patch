@@ -1,0 +1,34 @@
+diff --git a/src/input.rs b/src/input.rs
+index 77ab6ed..43859e7 100644
+--- a/src/input.rs
++++ b/src/input.rs
+@@ -957,6 +957,29 @@ impl<C: openxr_data::Compositor> vr::IVRInput011_Interface for Input<C> {
+ 
+         let mut out = WriteOnDrop::new(action_data);
+ 
++        // PSVR2Toolkit.UnitySetup gates creation of its initial room-scale
++        // polygon on a headset proximity action. Its PSVR2 HMD OpenVR profile
++        // is not currently representable through xrizer's controller bindings.
++        if std::env::var_os("XRIZER_FORCE_HEADSET_ON_HEAD").is_some() {
++            let action_key = ActionKey::from(KeyData::from_ffi(handle));
++            let is_headset_on_head = self
++                .action_map
++                .read()
++                .unwrap()
++                .get(action_key)
++                .is_some_and(|action| action.path == "/actions/playarea/in/headsetonhead");
++            if is_headset_on_head {
++                *out.value = vr::InputDigitalActionData_t {
++                    bActive: true,
++                    bState: true,
++                    activeOrigin: restrict_to_device,
++                    bChanged: false,
++                    fUpdateTime: 0.0,
++                };
++                return vr::EVRInputError::None;
++            }
++        }
++
+         get_action_from_handle!(self, handle, session_data, action);
+         let subaction_path = get_subaction_path!(self, restrict_to_device, action_data);
+         let ActionData::Bool(action) = &action else {

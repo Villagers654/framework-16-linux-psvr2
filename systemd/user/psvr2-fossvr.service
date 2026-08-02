@@ -1,0 +1,16 @@
+[Unit]
+Description=PSVR2 Toolkit + Monado high-performance OpenXR runtime
+Documentation=https://wiki.vronlinux.org/docs/hardware/psvr2/
+After=graphical-session.target bluetooth.target
+Conflicts=monado.service monado.socket
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/psvr2-monado-service
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=10
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

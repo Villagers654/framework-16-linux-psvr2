@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+psvr2-steamvr-bridge || true
+psvr2-sync-steam-vr-games || true
+
+env_args=(XRT_COMPOSITOR_SCALE_PERCENTAGE="$PSVR2_RENDER_SCALE")
+if [[ -n "$AMD_VULKAN_DEVICE" ]]; then
+    env_args+=(MESA_VK_DEVICE_SELECT="${AMD_VULKAN_DEVICE}!" MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE=1)
+fi
+exec env "${env_args[@]}" "$STEAM_COMMAND" "$@"

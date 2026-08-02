@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PSVR2 (Monado + WayVR)
+Comment=Start the PSVR2 Linux runtime and in-headset launcher
+Exec=@HOME@/.local/bin/psvr2-fossvr-start
+Icon=video-display
+Terminal=true
+Categories=Game;
