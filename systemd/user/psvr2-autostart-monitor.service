@@ -1,5 +1,5 @@
 [Unit]
-Description=Start the PSVR2 menu when the headset is connected
+Description=Start and stop PSVR2 VR services with the headset connection
 After=graphical-session.target bluetooth.target
 
 [Service]

@@ -1,8 +1,18 @@
 #!/usr/bin/bash
 set -u
 
-previous=unknown
-previous_controllers=0
+drm_root=${PSVR2_DRM_ROOT:-/sys/class/drm}
+
+headset_connected() {
+    /usr/bin/lsusb -d 054c:0cde >/dev/null 2>&1 || return 1
+    local connector
+    for connector in "$drm_root"/card*-*; do
+        [[ -r "$connector/status" && -r "$connector/edid" ]] || continue
+        [[ "$(<"$connector/status")" == connected ]] || continue
+        LC_ALL=C grep -aFq 'PS VR2' "$connector/edid" 2>/dev/null && return 0
+    done
+    return 1
+}
 
 controller_count() {
     local count=0 product file
@@ -17,14 +27,31 @@ controller_count() {
     printf '%s\n' "$count"
 }
 
+if [[ "${1:-}" == --probe ]]; then
+    headset_connected && { echo connected; exit 0; }
+    echo disconnected
+    exit 1
+fi
+
+if systemctl --user is-active --quiet psvr2-fossvr.service; then
+    previous=connected
+else
+    previous=disconnected
+fi
+previous_controllers=$(controller_count)
+
 while true; do
-    if /usr/bin/lsusb -d 054c:0cde >/dev/null 2>&1; then current=connected; else current=disconnected; fi
+    if headset_connected; then current=connected; else current=disconnected; fi
     if [[ "$current" != "$previous" ]]; then
         if [[ "$current" == connected ]]; then
+            echo "PSVR2 USB and DisplayPort connected; starting VR runtime"
             sleep 2
-            /usr/bin/lsusb -d 054c:0cde >/dev/null 2>&1 && psvr2-fossvr-start || true
-        elif systemctl --user is-active --quiet psvr2-fossvr.service; then
-            psvr2-fossvr-stop || true
+            headset_connected && psvr2-fossvr-start || true
+        else
+            echo "PSVR2 USB or DisplayPort disconnected; stopping VR runtime"
+            if systemctl --user is-active --quiet psvr2-fossvr.service; then
+                psvr2-fossvr-stop || true
+            fi
         fi
         previous=$current
         previous_controllers=$(controller_count)

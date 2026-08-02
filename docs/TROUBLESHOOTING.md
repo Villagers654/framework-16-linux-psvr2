@@ -27,6 +27,21 @@ calibration, run:
 systemctl --user restart psvr2-fossvr-wayvr.service
 ```
 
+## VR processes remain after physically disconnecting PSVR2
+
+The lifecycle monitor requires both the Sony USB device and a connected DRM
+output whose EDID identifies `PS VR2`. Losing either link stops the wrapped VR
+title, WayVR, Monado/Ignition, and the VR audio override. Check the live probe:
+
+```bash
+psvr2-autostart-monitor --probe
+systemctl --user status psvr2-autostart-monitor.service
+```
+
+The probe prints `connected` only when both USB and DisplayPort are present.
+Re-run `./install.sh --user --framework16-rx7700s` if an older USB-only monitor
+is installed.
+
 ## Headset goes black when a game is selected and Steam never starts it
 
 WayVR must send game URLs directly to Steam's native client, not through the

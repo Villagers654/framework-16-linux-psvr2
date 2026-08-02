@@ -12,14 +12,43 @@ export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
 export VR_OVERRIDE="$ENVISION_PROFILE_ROOT/xrizer/target/release"
 export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
 export PRESSURE_VESSEL_FILESYSTEMS_RW="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc${PRESSURE_VESSEL_FILESYSTEMS_RW:+:$PRESSURE_VESSEL_FILESYSTEMS_RW}"
+"$@" &
+game_pid=$!
+
+# If the headset monitor stops Monado because either cable disappears, end the
+# wrapped VR title as well instead of leaving Proton/Steam showing it as
+# running without a headset.
+(
+    while kill -0 "$game_pid" 2>/dev/null; do
+        if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
+            kill -TERM "$game_pid" 2>/dev/null || true
+            exit 0
+        fi
+        sleep 1
+    done
+) &
+runtime_watcher=$!
+
+forward_signal() { kill -TERM "$game_pid" 2>/dev/null || true; }
+cleanup_watcher() {
+    kill "$runtime_watcher" 2>/dev/null || true
+    wait "$runtime_watcher" 2>/dev/null || true
+}
+trap forward_signal HUP INT TERM
+trap cleanup_watcher EXIT
+
 set +e
-"$@"
+wait "$game_pid"
 game_status=$?
 set -e
+cleanup_watcher
+trap - EXIT HUP INT TERM
 
 # A primary OpenXR/OpenVR application suppresses WayVR while it owns the HMD.
 # Recreate only the overlay after the game exits so the headset returns to the
 # Games dashboard instead of Monado's otherwise-empty fallback environment.
 # Keep Monado alive to preserve the calibrated tracking origin.
-systemctl --user restart psvr2-fossvr-wayvr.service || true
+if systemctl --user is-active --quiet psvr2-fossvr.service; then
+    systemctl --user restart psvr2-fossvr-wayvr.service || true
+fi
 exit "$game_status"

@@ -142,17 +142,20 @@ controller pairing, read [docs/SETUP.md](docs/SETUP.md).
 - Select **Applications**: launch desktop applications or view the GNOME desktop.
 - Exit a game or Room Setup: the wrapper restores WayVR directly to the Games
   dashboard while keeping Monado and the calibrated tracking origin alive.
+- Disconnect the headset's USB, DisplayPort, adapter power, or headset cable:
+  the active VR title, WayVR, Monado, and Ignition helper close automatically,
+  and the previous desktop audio output is restored. Steam itself stays open.
 - Stop VR: launch **Stop PSVR2 (Monado)** from GNOME or run `psvr2-fossvr-stop`.
 - Manual start: launch **PSVR2 (Monado + WayVR)** or run `psvr2-fossvr-start`.
 
-If you manually stop VR while the headset remains connected, the USB monitor
+If you manually stop VR while the headset remains connected, the connection monitor
 does not immediately fight you and restart it. Power-cycle the headset or use
 the manual launcher when you want VR again.
 
 ## Repository layout
 
 - `bin/` – portable versions of every helper used by the working setup
-- `systemd/user/` – Monado, WayVR, maintenance, and USB monitor user units
+- `systemd/user/` – Monado, WayVR, maintenance, and connection-monitor user units
 - `systemd/system/` – optional AMD dGPU power guard
 - `udev/` – PSVR2 permissions and conditional AMD power hooks
 - `patches/` – exact Monado, xrizer, and WayVR source changes
