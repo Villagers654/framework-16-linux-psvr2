@@ -31,6 +31,7 @@ if [[ "$mode" == user ]]; then
     [[ ${EUID} -ne 0 ]] || { echo "Run --user as your normal account." >&2; exit 1; }
     install -d "$HOME/.local/bin" "$HOME/.local/lib/psvr2-linux" \
         "$HOME/.config/psvr2-linux" "$HOME/.config/systemd/user" \
+        "$HOME/.config/wireplumber/wireplumber.conf.d" \
         "$HOME/.local/share/applications" "$HOME/.local/share/psvr2-setup"
     install -m 0755 "$repo_dir"/bin/* "$HOME/.local/bin/"
     install -m 0644 "$repo_dir/lib/psvr2-common.sh" "$HOME/.local/lib/psvr2-linux/common.sh"
@@ -48,7 +49,21 @@ if [[ "$mode" == user ]]; then
                 "$HOME/.config/psvr2-linux/settings.env"
             sed -i 's/^DGPU_PCI_ADDRESS=.*/DGPU_PCI_ADDRESS=""/' \
                 "$HOME/.config/psvr2-linux/settings.env"
+            sed -i 's/^VR_AUDIO_SINK=.*/VR_AUDIO_SINK=""/' \
+                "$HOME/.config/psvr2-linux/settings.env"
         fi
+    fi
+
+    # Apply LVRA's DisplayPort dropout fix only to the configured HMD sink.
+    # shellcheck disable=SC1090
+    source "$HOME/.config/psvr2-linux/settings.env"
+    audio_rule="$HOME/.config/wireplumber/wireplumber.conf.d/51-psvr2-displayport-audio.conf"
+    if [[ -n "${VR_AUDIO_SINK:-}" ]]; then
+        sed "s|@VR_AUDIO_SINK@|$VR_AUDIO_SINK|g" \
+            "$repo_dir/config/wireplumber/51-psvr2-displayport-audio.conf.in" > "$audio_rule"
+        chmod 0644 "$audio_rule"
+    else
+        rm -f "$audio_rule"
     fi
 
     for template in "$repo_dir"/desktop/*.desktop.in; do

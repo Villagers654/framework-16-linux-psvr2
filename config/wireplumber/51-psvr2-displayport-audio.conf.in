@@ -1,0 +1,19 @@
+# Framework 16 RX 7700S DisplayPort audio to PSVR2.
+# Replace @VR_AUDIO_SINK@ with the stable PipeWire node name from `wpctl status -n`.
+monitor.alsa.rules = [
+  {
+    matches = [
+      {
+        node.name = "@VR_AUDIO_SINK@"
+      }
+    ]
+    actions = {
+      update-props = {
+        audio.rate = 48000
+        api.alsa.period-size = 64
+        api.alsa.headroom = 512
+        session.suspend-timeout-seconds = 0
+      }
+    }
+  }
+]

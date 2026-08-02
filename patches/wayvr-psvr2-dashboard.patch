@@ -52,6 +52,23 @@ index 3c7faa3a..2d69d40e 100644
  	Ok(())
  }
  
+@@ -224,9 +237,9 @@
+ fn call_steam(arg: &str) -> anyhow::Result<()> {
+-	match std::process::Command::new("xdg-open").arg(arg).spawn() {
+-		Ok(_) => Ok(()),
+-		Err(_) => {
+-			std::process::Command::new("steam").arg(arg).spawn()?;
+-			Ok(())
+-		}
+-	}
++	// Do not use xdg-open here. A desktop may intentionally register a
++	// SteamVR-specific URL handler which stops the active Monado session before
++	// forwarding the URI. Games launched from this dashboard must remain on the
++	// current OpenXR runtime.
++	let command = std::env::var("WAYVR_STEAM_COMMAND").unwrap_or_else(|_| "steam".into());
++	std::process::Command::new(command).arg(arg).spawn()?;
++	Ok(())
+ }
 @@ -284,6 +297,28 @@ impl SteamUtils {
  			})
  			.collect();
@@ -116,14 +133,14 @@ index ceecfc74..34957555 100644
              TaskType::Overlay(OverlayTask::ShowHide),
              Instant::now().add(Duration::from_secs(1)),
          );
-+
-+		// The PSVR2's startup destination is the game/application menu, not an
-+		// empty home scene.  The watch remains available for reopening it later.
-+		app.tasks.enqueue_at(
-+			TaskType::Overlay(OverlayTask::ToggleDashboard),
-+			Instant::now().add(Duration::from_millis(1400)),
-+		);
      }
++
++	// The PSVR2's startup destination is the game/application menu, not the
++	// desktop working set. The watch remains available for reopening it later.
++	app.tasks.enqueue_at(
++		TaskType::Overlay(OverlayTask::ToggleDashboard),
++		Instant::now().add(Duration::from_millis(1400)),
++	);
  
      let mut overlays = OverlayWindowManager::<OpenXrOverlayData>::new(&mut app, headless)?;
 @@ -281,7 +288,25 @@ pub fn openxr_run(

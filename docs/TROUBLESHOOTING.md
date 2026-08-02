@@ -13,6 +13,16 @@ Confirm both controller HID devices exist with `psvr2-controller-preflight`.
 If BlueZ says connected but no HID device exists, fill the optional controller
 MACs in the private settings file and rerun the preflight.
 
+## Headset goes black when a game is selected and Steam never starts it
+
+WayVR must send game URLs directly to Steam's native client, not through the
+desktop `steam:` URL handler. The latter may be registered to the SteamVR
+bridge and will stop the active Monado session during launch. Re-run
+`./install.sh`; the patched WayVR and `psvr2-wayvr` wrapper set the direct
+client route permanently. A successful launch keeps both
+`psvr2-fossvr.service` and `psvr2-fossvr-wayvr.service` active while the game
+connects to Monado.
+
 ## Room Setup tracks controllers but has no boundary
 
 This is not a standing-only calibration problem. It means the app's optional

@@ -7,7 +7,7 @@ PartOf=psvr2-fossvr.service
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/psvr2-wayvr --openxr --show --replace
+ExecStart=%h/.local/bin/psvr2-wayvr --openxr --replace
 Restart=always
 RestartSec=2
 TimeoutStopSec=5

@@ -6,4 +6,9 @@ brew_prefix=$(brew --prefix 2>/dev/null || true)
 if [[ -n "$brew_prefix" ]]; then
     export LD_LIBRARY_PATH="$brew_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
+if [[ -x "$STEAM_ROOT/ubuntu12_32/steam" ]]; then
+    export WAYVR_STEAM_COMMAND="$STEAM_ROOT/ubuntu12_32/steam"
+else
+    export WAYVR_STEAM_COMMAND=/usr/bin/steam
+fi
 exec "$PSVR2_SETUP_ROOT/wayvr/wayvr" "$@"
