@@ -12,4 +12,14 @@ export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
 export VR_OVERRIDE="$ENVISION_PROFILE_ROOT/xrizer/target/release"
 export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
 export PRESSURE_VESSEL_FILESYSTEMS_RW="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc${PRESSURE_VESSEL_FILESYSTEMS_RW:+:$PRESSURE_VESSEL_FILESYSTEMS_RW}"
-exec "$@"
+set +e
+"$@"
+game_status=$?
+set -e
+
+# A primary OpenXR/OpenVR application suppresses WayVR while it owns the HMD.
+# Recreate only the overlay after the game exits so the headset returns to the
+# Games dashboard instead of Monado's otherwise-empty fallback environment.
+# Keep Monado alive to preserve the calibrated tracking origin.
+systemctl --user restart psvr2-fossvr-wayvr.service || true
+exit "$game_status"

@@ -140,6 +140,8 @@ controller pairing, read [docs/SETUP.md](docs/SETUP.md).
 - Select **Games**: only detected Steam VR titles are listed.
 - Select **PSVR2 Room Setup**: run full room-scale calibration from the headset.
 - Select **Applications**: launch desktop applications or view the GNOME desktop.
+- Exit a game or Room Setup: the wrapper restores WayVR directly to the Games
+  dashboard while keeping Monado and the calibrated tracking origin alive.
 - Stop VR: launch **Stop PSVR2 (Monado)** from GNOME or run `psvr2-fossvr-stop`.
 - Manual start: launch **PSVR2 (Monado + WayVR)** or run `psvr2-fossvr-start`.
 

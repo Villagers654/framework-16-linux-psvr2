@@ -13,6 +13,20 @@ Confirm both controller HID devices exist with `psvr2-controller-preflight`.
 If BlueZ says connected but no HID device exists, fill the optional controller
 MACs in the private settings file and rerun the preflight.
 
+## Blue Monado environment after leaving a game or reconnecting
+
+The blue space is Monado's fallback environment, not a tracking failure. It
+means the compositor is healthy but no application or WayVR dashboard is
+currently presenting. Current installs run games through `psvr2-fossvr-run`,
+which restarts only the WayVR overlay when the game exits and returns directly
+to its Games tab. Re-run `./install.sh --user --framework16-rx7700s` to update
+an older wrapper. To recover an already-stale session without losing room
+calibration, run:
+
+```bash
+systemctl --user restart psvr2-fossvr-wayvr.service
+```
+
 ## Headset goes black when a game is selected and Steam never starts it
 
 WayVR must send game URLs directly to Steam's native client, not through the
