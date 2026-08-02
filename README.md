@@ -49,12 +49,58 @@ Framework's side Expansion Card display outputs are normally routed through the
 iGPU. The rear USB-C/DisplayPort output on the RX 7700S Expansion Bay is the
 important part of this configuration.
 
+## Prerequisites and dependencies
+
+This repository contains integration scripts and source patches, not the
+commercial software or prebuilt community runtime. Install these prerequisites
+before running the quick start.
+
+| Requirement | What is needed | Notes |
+|---|---|---|
+| Steam stack | Native Linux Steam, SteamVR, PlayStation VR2 App, and Proton Experimental | The scripts default to `~/.local/share/Steam`. Flatpak Steam is not currently supported without changing paths and sandbox permissions. Start Steam and sign in at least once. |
+| VR builder | Envision and an OpenXR loader/development package | Envision builds the pinned Monado and xrizer sources. On Fedora/Bazzite the development package is `openxr-devel`. |
+| Graphics | A working Vulkan driver and `vulkaninfo` | Use Mesa RADV on AMD. Do not use AMDVLK or AMDGPU-PRO for this wired-VR path. |
+| Host services | systemd user services, udev, BlueZ, PipeWire, and WirePlumber | Required for automatic startup, device permissions, Sense pairing, and PSVR2 audio routing. |
+| Script utilities | Bash, Git, cURL, UnZip, `jq`, Python 3, `usbutils`, `pciutils`, and `iproute` | These supply `git`, `curl`, `unzip`, `jq`, `python3`, `lsusb`, `lspci`, and `ss`. Internet access to GitHub, GitLab, Steam, and Homebrew is required during setup. |
+| WayVR build | Rust/Cargo, CMake, Ninja, Meson, pkg-config, shaderc, ALSA, PipeWire, xkbcommon, D-Bus, and OpenSSL development files | The tested Bazzite setup supplies this self-contained toolchain through Homebrew; equivalent distribution development packages also work. |
+| Screenshot shortcut | `wmctrl`, ImageMagick, and `notify-send` | Optional. Only required for the PS-button + trigger screenshot chord. |
+
+The headset and Sony PC adapter must have PC-compatible firmware. If the
+PlayStation VR2 App cannot perform a required firmware update under Proton,
+update them once from Windows before continuing. A BlueZ-compatible Bluetooth
+adapter is required only when you reach Sense controller pairing.
+
+The tested Bazzite host layers the packages that must integrate with the host:
+
+```bash
+rpm-ostree install envision openxr-devel wmctrl ImageMagick
+```
+
+Bazzite already includes most runtime utilities listed above. Confirm that
+`git curl unzip jq python3 lsusb lspci ss bluetoothctl wpctl vulkaninfo` are
+available. Their Fedora package names are `git-core`, `curl`, `unzip`, `jq`,
+`python3`, `usbutils`, `pciutils`, `iproute`, `bluez`, `wireplumber`, and
+`vulkan-tools`; `libnotify` supplies the optional `notify-send` command.
+
+Install Homebrew for Linux, then install the complete tested WayVR build
+toolchain:
+
+```bash
+brew install cmake ninja meson rust shaderc pkgconf \
+  alsa-lib pipewire libxkbcommon dbus openssl@3
+```
+
+On mutable Fedora, Arch, Debian/Ubuntu, or another distribution, install the
+equivalent runtime and `-devel`/`-dev` packages through the native package
+manager. Package names differ, but every non-optional capability in the table
+is required.
+Allow several gigabytes for SteamVR, Proton prefixes, Monado/xrizer sources,
+and release builds.
+
 ## Quick start
 
-First install Steam, **SteamVR**, **PlayStation VR2 App**, Envision, Git, Rust,
-build tools, `jq`, `curl`, `unzip`, `bluez`, PipeWire tools, Vulkan tools, and
-Homebrew. `wmctrl` and ImageMagick provide the controller screenshot shortcut.
-On Bazzite, see [docs/BAZZITE.md](docs/BAZZITE.md) before continuing.
+Install the prerequisites above first. On Bazzite, also read
+[docs/BAZZITE.md](docs/BAZZITE.md) before changing kernel arguments.
 
 ```bash
 git clone https://github.com/Villagers654/framework-16-linux-psvr2.git

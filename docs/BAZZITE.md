@@ -13,8 +13,13 @@ rpm-ostree install envision openxr-devel wmctrl ImageMagick
 Use Homebrew for rapidly changing build dependencies where practical:
 
 ```bash
-brew install cmake ninja meson rust shaderc pkg-config
+brew install cmake ninja meson rust shaderc pkgconf \
+  alsa-lib pipewire libxkbcommon dbus openssl@3
 ```
+
+The additional libraries are WayVR build dependencies. Keeping them in the
+same Homebrew prefix lets `scripts/build-wayvr.sh` provide Cargo a consistent
+pkg-config and linker search path on the immutable host.
 
 The tested Framework 16/RX 7700S boot arguments are:
 
