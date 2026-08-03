@@ -1,0 +1,35 @@
+diff --git a/src/xrt/auxiliary/util/u_debug_gui.c b/src/xrt/auxiliary/util/u_debug_gui.c
+index a0b6005..0c9bf23 100644
+--- a/src/xrt/auxiliary/util/u_debug_gui.c
++++ b/src/xrt/auxiliary/util/u_debug_gui.c
+@@ -63,0 +64 @@ DEBUG_GET_ONCE_BOOL_OPTION(gui, "XRT_DEBUG_GUI", false)
++DEBUG_GET_ONCE_BOOL_OPTION(spectator_mode, "XRT_SPECTATOR_MODE", false)
+@@ -125,0 +127,4 @@ sdl2_window_init(struct u_debug_gui *p)
++	if (debug_get_bool_option_spectator_mode()) {
++		window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
++		window_flags |= SDL_WINDOW_BORDERLESS;
++	}
+@@ -134,0 +140,3 @@ sdl2_window_init(struct u_debug_gui *p)
++	if (debug_get_bool_option_spectator_mode()) {
++		SDL_SetWindowTitle(p->win, "PSVR2 Spectator View");
++	}
+diff --git a/src/xrt/state_trackers/gui/gui_scene_debug.c b/src/xrt/state_trackers/gui/gui_scene_debug.c
+index 6c8efca..ec9320e 100644
+--- a/src/xrt/state_trackers/gui/gui_scene_debug.c
++++ b/src/xrt/state_trackers/gui/gui_scene_debug.c
+@@ -129,0 +130 @@ DEBUG_GET_ONCE_BOOL_OPTION(curated_gui, "XRT_CURATED_GUI", false)
++DEBUG_GET_ONCE_BOOL_OPTION(spectator_mode, "XRT_SPECTATOR_MODE", false)
+@@ -959 +960,4 @@ curated_render(struct debug_scene *ds, struct gui_program *p)
+-	// Always enable the mirror sink.
++	bool spectator_mode = debug_get_bool_option_spectator_mode();
++
++	// Force Monado's scratch view so the spectator can import it without a
++	// blocking GPU-to-CPU readback.
+@@ -968,0 +973,7 @@ curated_render(struct debug_scene *ds, struct gui_program *p)
++	if (spectator_mode) {
++		if (cs.mirror.view_0 != NULL) {
++			draw_native_images_to_background(cs.mirror.view_0, &cs.ds);
++		}
++		return;
++	}
++

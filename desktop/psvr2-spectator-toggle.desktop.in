@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Toggle PSVR2 Spectator View
+Comment=Persistently enable or disable the fullscreen laptop VR mirror
+Exec=@HOME@/.local/bin/psvr2-spectator toggle
+Icon=video-display
+Terminal=false
+Categories=Utility;

@@ -13,6 +13,8 @@ git -C "$root/xrservice" fetch origin psvr2-linux-steam-lh
 git -C "$root/xrservice" checkout 8bd01e7edec8028f65c7bff925195f0454d4bc9f
 git -C "$root/xrservice" apply --check "$repo/patches/monado-psvr2-sense.patch" 2>/dev/null && \
   git -C "$root/xrservice" apply "$repo/patches/monado-psvr2-sense.patch" || true
+git -C "$root/xrservice" apply --check "$repo/patches/monado-spectator-mirror.patch" 2>/dev/null && \
+  git -C "$root/xrservice" apply "$repo/patches/monado-spectator-mirror.patch" || true
 
 if [[ ! -d "$root/xrizer/.git" ]]; then
   git clone --recurse-submodules https://github.com/Supreeeme/xrizer "$root/xrizer"

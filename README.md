@@ -11,6 +11,7 @@ The finished experience is deliberately console-like:
 3. The headset opens directly to a filtered grid of installed Steam VR games.
 4. **PSVR2 Room Setup** is in that grid beside the games.
 5. Point, pull the trigger, and play.
+6. A borderless fullscreen spectator view appears on the laptop display.
 
 The tested default is **120 Hz** at Monado's **170% compositor scale**, which
 reports a distortion-corrected recommendation of **3400×3468 per eye** on this
@@ -133,6 +134,13 @@ controller pairing, read [docs/SETUP.md](docs/SETUP.md).
 ## Everyday use
 
 - Power on/connect PSVR2: the runtime and game launcher start automatically.
+- The laptop shows a borderless fullscreen, GPU-native left-eye spectator view
+  while the headset continues rendering at 120 Hz. Set
+  `PSVR2_SPECTATOR_ENABLE=0` to disable it in `settings.env`.
+- Run `psvr2-spectator on`, `psvr2-spectator off`, or
+  `psvr2-spectator toggle` to change that choice persistently. The command
+  cleanly restarts an active VR session; add `--no-restart` to defer it. GNOME's
+  app grid also contains **Toggle PSVR2 Spectator View**.
 - Turn controllers on afterward: the monitor detects them and refreshes Monado.
 - Press either PS button: show or hide the WayVR dashboard.
 - Hold either PS button, then pull either trigger: save the VR mirror to

@@ -6,10 +6,18 @@ export LH_LOAD_PSVR2=1
 export LH_DISCOVER_WAIT_MS=5000
 export XRT_COMPOSITOR_SCALE_PERCENTAGE="$PSVR2_RENDER_SCALE"
 export XRT_COMPOSITOR_COMPUTE=1
+if [[ "$PSVR2_SPECTATOR_ENABLE" = 1 ]]; then
+    export XRT_DEBUG_GUI=1 XRT_CURATED_GUI=1 XRT_SPECTATOR_MODE=1
+    # XWayland gives the dGPU-backed OpenGL mirror a reliable presentation path
+    # on GNOME Wayland while the headset remains on Monado's direct display.
+    export SDL_VIDEODRIVER=x11
+else
+    export XRT_DEBUG_GUI=0 XRT_CURATED_GUI=0
+fi
 export XRT_COMPOSITOR_FORCE_VK_DISPLAY=0
 export XRT_COMP_FRAME_LAG_LOG_AS_LEVEL=debug
 export U_PACING_APP_USE_MIN_FRAME_PERIOD=1
-export XRT_DEBUG_GUI=0 XRT_CURATED_GUI=0 XRT_NO_STDIN=1
+export XRT_NO_STDIN=1
 export IPC_EXIT_ON_DISCONNECT=OFF
 if [[ -n "$AMD_VULKAN_DEVICE" ]]; then
     export MESA_VK_DEVICE_SELECT="${AMD_VULKAN_DEVICE}!"
