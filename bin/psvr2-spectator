@@ -47,13 +47,15 @@ apply_state() {
             'Environment="XRT_DEBUG_GUI=1"' \
             'Environment="XRT_CURATED_GUI=1"' \
             'Environment="XRT_SPECTATOR_MODE=1"' \
+            'UnsetEnvironment=XRT_WINDOW_PEEK' \
             'Environment="SDL_VIDEODRIVER=x11"' > "$tmp"
     else
         printf '%s\n' \
             '[Service]' \
             'Environment="XRT_DEBUG_GUI=0"' \
             'Environment="XRT_CURATED_GUI=0"' \
-            'Environment="XRT_SPECTATOR_MODE=0"' > "$tmp"
+            'Environment="XRT_SPECTATOR_MODE=0"' \
+            'UnsetEnvironment=XRT_WINDOW_PEEK' > "$tmp"
     fi
     chmod 0644 "$tmp"
     mv -f "$tmp" "$dropin"

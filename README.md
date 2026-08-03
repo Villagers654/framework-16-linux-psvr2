@@ -178,7 +178,7 @@ the manual launcher when you want VR again.
 |---|---|
 | PSVR2 Toolkit | `v1.0.0-experimental-1` (`PSVR2TK-win64-Ignition.zip`) |
 | Ignition | `v1.0.0` |
-| PSVR2Toolkit.UnitySetup | `v1.0.0` |
+| PSVR2Toolkit.UnitySetup | `v1.1.0` |
 | SteamVRLinuxFixes | `v0.1.4` |
 | Supremium Monado branch | `psvr2-linux-steam-lh` at `8bd01e7edec8028f65c7bff925195f0454d4bc9f` |
 | xrizer | `6c3e45f4c18b014a7aba87282ee0677306315052` |

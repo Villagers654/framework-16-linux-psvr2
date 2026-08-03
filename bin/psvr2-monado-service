@@ -6,6 +6,8 @@ export LH_LOAD_PSVR2=1
 export LH_DISCOVER_WAIT_MS=5000
 export XRT_COMPOSITOR_SCALE_PERCENTAGE="$PSVR2_RENDER_SCALE"
 export XRT_COMPOSITOR_COMPUTE=1
+# Never inherit the abandoned experimental window-peek mirror path.
+unset XRT_WINDOW_PEEK
 if [[ "$PSVR2_SPECTATOR_ENABLE" = 1 ]]; then
     export XRT_DEBUG_GUI=1 XRT_CURATED_GUI=1 XRT_SPECTATOR_MODE=1
     # XWayland gives the dGPU-backed OpenGL mirror a reliable presentation path

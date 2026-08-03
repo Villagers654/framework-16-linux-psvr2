@@ -19,7 +19,7 @@ fetch_extract ignition \
   https://github.com/BnuuySolutions/Ignition/releases/download/v1.0.0/Ignition-Linux-Windows.zip \
   "$root/ignition"
 fetch_extract unity-setup \
-  https://github.com/BnuuySolutions/PSVR2Toolkit.UnitySetup/releases/download/v1.0.0/PSVR2Toolkit.UnitySetup-Linux.zip \
+  https://github.com/BnuuySolutions/PSVR2Toolkit.UnitySetup/releases/download/v1.1.0/PSVR2Toolkit.UnitySetup-Linux.zip \
   "$root/unity-setup"
 fetch_extract steamvr-linux-fixes \
   https://github.com/BnuuySolutions/SteamVRLinuxFixes/releases/download/v0.1.4/VK_LAYER_BNUUY_steamvr_linux_fixes.zip \
