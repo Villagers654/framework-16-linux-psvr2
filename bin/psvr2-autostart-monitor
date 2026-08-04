@@ -2,9 +2,26 @@
 set -u
 
 drm_root=${PSVR2_DRM_ROOT:-/sys/class/drm}
+suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
+next_retry=0
 
 headset_connected() {
-    /usr/bin/lsusb -d 054c:0cde >/dev/null 2>&1 || return 1
+    # The adapter exposes a 12 Mbps USB control function even when the HMD is
+    # powered off. Starting Sony's driver in that state makes it address the
+    # unavailable camera interfaces and can wedge the AMD xHCI controller.
+    # Require the separate 5 Gbps PSVR2 function before declaring it ready.
+    local usb_device speed
+    local superspeed_ready=0
+    for usb_device in /sys/bus/usb/devices/*; do
+        [[ -r "$usb_device/idVendor" && -r "$usb_device/idProduct" && -r "$usb_device/speed" ]] || continue
+        [[ "$(<"$usb_device/idVendor"):$(<"$usb_device/idProduct")" == 054c:0cde ]] || continue
+        speed=$(<"$usb_device/speed")
+        if awk -v speed="$speed" 'BEGIN { exit !(speed >= 5000) }'; then
+            superspeed_ready=1
+            break
+        fi
+    done
+    (( superspeed_ready )) || return 1
     local connector
     for connector in "$drm_root"/card*-*; do
         [[ -r "$connector/status" && -r "$connector/edid" ]] || continue
@@ -27,6 +44,22 @@ controller_count() {
     printf '%s\n' "$count"
 }
 
+start_runtime() {
+    local attempt
+    for attempt in 1 2 3; do
+        echo "PSVR2 startup attempt $attempt/3"
+        sleep 5
+        headset_connected || return 1
+        if psvr2-fossvr-start; then
+            return 0
+        fi
+        echo "PSVR2 runtime was not healthy; retrying after cleanup" >&2
+        PSVR2_AUTOMATED_STOP=1 psvr2-fossvr-stop || true
+    done
+    echo "PSVR2 failed to start after 3 attempts; reconnect it to try again" >&2
+    return 1
+}
+
 if [[ "${1:-}" == --probe ]]; then
     headset_connected && { echo connected; exit 0; }
     echo disconnected
@@ -45,13 +78,14 @@ while true; do
     if [[ "$current" != "$previous" ]]; then
         if [[ "$current" == connected ]]; then
             echo "PSVR2 USB and DisplayPort connected; starting VR runtime"
-            sleep 2
-            headset_connected && psvr2-fossvr-start || true
+            start_runtime || next_retry=$((SECONDS + 30))
         else
             echo "PSVR2 USB or DisplayPort disconnected; stopping VR runtime"
             if systemctl --user is-active --quiet psvr2-fossvr.service; then
-                psvr2-fossvr-stop || true
+                PSVR2_AUTOMATED_STOP=1 psvr2-fossvr-stop || true
             fi
+            rm -f "$suppress_file"
+            next_retry=0
         fi
         previous=$current
         previous_controllers=$(controller_count)
@@ -59,10 +93,17 @@ while true; do
         controllers=$(controller_count)
         if (( controllers > previous_controllers )) && systemctl --user is-active --quiet psvr2-fossvr.service; then
             sleep 2
-            psvr2-fossvr-start || true
+            if ! psvr2-fossvr-start; then
+                echo "PSVR2 controller refresh failed; leaving runtime stopped" >&2
+            fi
             controllers=$(controller_count)
         fi
         previous_controllers=$controllers
+        if ! systemctl --user is-active --quiet psvr2-fossvr.service \
+            && [[ ! -e "$suppress_file" ]] && (( SECONDS >= next_retry )); then
+            echo "PSVR2 is connected but runtime is not healthy; retrying startup"
+            start_runtime || next_retry=$((SECONDS + 30))
+        fi
     fi
     sleep 2
 done
