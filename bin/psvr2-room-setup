@@ -32,21 +32,30 @@ helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 service_since=$(systemctl --user show psvr2-fossvr.service \
     --property=ActiveEnterTimestamp --value)
 tracking_ready=false
-for _ in $(seq 1 60); do
-    last_status=$(journalctl --user -u psvr2-fossvr.service \
-        --since "$service_since" --no-pager 2>/dev/null \
-        | grep 'TrackingStatus' | tail -n 1 || true)
-    if [[ "$last_status" == *'-> stable' ]]; then
-        sleep 3
-        if ! journalctl --user -u psvr2-fossvr.service \
-            --since '4 seconds ago' --no-pager 2>/dev/null \
-            | grep -Eq '\[HMD\] Jump|TrackingStatus.*-> (searching|unstable|lost)|map registration error 0 -> 1'; then
-            tracking_ready=true
-            break
+chaperone="$STEAM_ROOT/config/playstation_vr2/chaperone_info.vrchap"
+if [[ -r "$chaperone" ]] \
+    && grep -Eq '"play_area"[[:space:]]*:[[:space:]]*\[[[:space:]]*0([.]0+)?[[:space:]]*,[[:space:]]*0([.]0+)?[[:space:]]*\]' "$chaperone" \
+    && grep -Eq '"collision_bounds"[[:space:]]*:[[:space:]]*null' "$chaperone"; then
+    # A factory-fresh calibration has no standing transform to capture
+    # incorrectly, and Room Setup itself is what creates the first stable map.
+    tracking_ready=true
+else
+    for _ in $(seq 1 60); do
+        last_status=$(journalctl --user -u psvr2-fossvr.service \
+            --since "$service_since" --no-pager 2>/dev/null \
+            | grep 'TrackingStatus' | tail -n 1 || true)
+        if [[ "$last_status" == *'-> stable' ]]; then
+            sleep 3
+            if ! journalctl --user -u psvr2-fossvr.service \
+                --since '4 seconds ago' --no-pager 2>/dev/null \
+                | grep -Eq '\[HMD\] Jump|TrackingStatus.*-> (searching|unstable|lost)|map registration error 0 -> 1'; then
+                tracking_ready=true
+                break
+            fi
         fi
-    fi
-    sleep 1
-done
+        sleep 1
+    done
+fi
 if [[ "$tracking_ready" != true ]]; then
     notify-send 'PSVR2 Room Setup' \
         'Waiting for headset tracking timed out. Look around the room and launch Room Setup again.' \
