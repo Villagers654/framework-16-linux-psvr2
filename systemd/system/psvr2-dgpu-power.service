@@ -2,7 +2,8 @@
 Description=Keep an AMD dGPU awake while PSVR2 is connected
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/local/libexec/psvr2-dgpu-power on
+Type=simple
+ExecStart=/usr/local/libexec/psvr2-dgpu-power hold
 ExecStop=/usr/local/libexec/psvr2-dgpu-power auto
+Restart=on-failure
+RestartSec=2

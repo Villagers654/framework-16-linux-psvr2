@@ -3,7 +3,9 @@
 The optional dGPU guard selects AMDGPU's VR-oriented power profile, prevents
 runtime suspend while the headset adapter is present, and restores automatic
 power management on disconnect. It is installed only by
-`--framework16-rx7700s`.
+`--framework16-rx7700s`. The guard remains running while PSVR2 is connected and
+reasserts the profile if the desktop power manager resets it after login; a
+one-shot profile change is not persistent enough on the tested Bazzite system.
 
 The settings file forces Vulkan onto the GPU connected to PSVR2 using
 `MESA_VK_DEVICE_SELECT`. Change or clear this value on other GPUs. Incorrect

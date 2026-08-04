@@ -2,20 +2,46 @@
 set -euo pipefail
 
 state_file=/run/psvr2-dgpu-power.devices
-case "${1:-}" in
-  on)
+
+discover_devices() {
     : > "$state_file"
     for card in /sys/class/drm/card[0-9]; do
       device=$(readlink -f "$card/device")
       [[ "$(cat "$device/vendor" 2>/dev/null || true)" == "0x1002" ]] || continue
       [[ "$(cat "$device/boot_vga" 2>/dev/null || true)" == "0" ]] || continue
+      printf '%s\n' "$device" >> "$state_file"
+    done
+}
+
+apply_vr_profile() {
+    [[ -r "$state_file" ]] || return 0
+    while IFS= read -r device; do
+      [[ -d "$device" ]] || continue
       echo on > "$device/power/control"
-      [[ ! -w "$device/power_dpm_force_performance_level" ]] || echo manual > "$device/power_dpm_force_performance_level"
+      if [[ -w "$device/power_dpm_force_performance_level" ]] &&
+         [[ "$(<"$device/power_dpm_force_performance_level")" != manual ]]; then
+        echo manual > "$device/power_dpm_force_performance_level"
+      fi
       if [[ -w "$device/pp_power_profile_mode" ]]; then
         vr_profile=$(awk 'NR == 1 { for (i=1; i<=NF; i++) if ($i == "VR") { print $(i-1); exit } }' "$device/pp_power_profile_mode")
-        [[ -z "$vr_profile" ]] || echo "$vr_profile" > "$device/pp_power_profile_mode"
+        if [[ -n "$vr_profile" ]] &&
+           ! head -n 1 "$device/pp_power_profile_mode" | grep -Eq "${vr_profile}[[:space:]]+VR[[:space:]]+\\*"; then
+          echo "$vr_profile" > "$device/pp_power_profile_mode"
+        fi
       fi
-      printf '%s\n' "$device" >> "$state_file"
+    done < "$state_file"
+}
+
+case "${1:-}" in
+  on)
+    discover_devices
+    apply_vr_profile
+    ;;
+  hold)
+    discover_devices
+    while true; do
+      apply_vr_profile
+      sleep 2
     done
     ;;
   auto)
@@ -28,5 +54,5 @@ case "${1:-}" in
       rm -f "$state_file"
     fi
     ;;
-  *) echo "usage: $0 on|auto" >&2; exit 2 ;;
+  *) echo "usage: $0 on|hold|auto" >&2; exit 2 ;;
 esac
