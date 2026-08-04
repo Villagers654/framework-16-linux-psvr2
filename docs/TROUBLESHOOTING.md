@@ -88,6 +88,12 @@ Do not launch OpenVR games outside the wrapper. The per-game launch option must
 contain `~/.local/bin/psvr2-fossvr-run %command%`. Run
 `psvr2-sync-steam-vr-games` while Steam is stopped to restore VR-title options.
 
+For **Keep Talking and Nobody Explodes**, this also restores the forced Proton
+Experimental mapping. Its native Linux build does not contain VR support; do
+not switch it back to the Linux runtime if you want to launch it in VR.
+The helper additionally restores the known-good KTaNE profile (`VSync=0`, MSAA
+off) while leaving the global 120 Hz / 170% PSVR2 target unchanged.
+
 ## SteamVR DRM lease error on GNOME Wayland
 
 The normal play path here is Monado + xrizer, not Valve's compositor. Direct

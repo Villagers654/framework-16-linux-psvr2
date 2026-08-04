@@ -25,7 +25,15 @@ export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
 export VR_OVERRIDE="$ENVISION_PROFILE_ROOT/xrizer/target/release"
 export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
 export PRESSURE_VESSEL_FILESYSTEMS_RW="$socket${PRESSURE_VESSEL_FILESYSTEMS_RW:+:$PRESSURE_VESSEL_FILESYSTEMS_RW}"
-"$@" &
+# VR frame pacing comes from OpenXR's wait-frame path. Never let a game's
+# optional desktop mirror add a second, laptop-display vblank deadline.
+export vblank_mode=0
+export MESA_VK_WSI_PRESENT_MODE=immediate
+
+# Put each Steam launch in its own process group. If a Proton/Wine child
+# outlives the launcher or the headset disappears, the whole title exits and
+# cannot keep consuming the GPU underneath the restored WayVR dashboard.
+setsid "$@" &
 game_pid=$!
 
 # If the headset monitor stops Monado because either cable disappears, end the
@@ -34,7 +42,7 @@ game_pid=$!
 (
     while kill -0 "$game_pid" 2>/dev/null; do
         if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
-            kill -TERM "$game_pid" 2>/dev/null || true
+            kill -TERM -- "-$game_pid" 2>/dev/null || true
             exit 0
         fi
         sleep 1
@@ -42,7 +50,7 @@ game_pid=$!
 ) &
 runtime_watcher=$!
 
-forward_signal() { kill -TERM "$game_pid" 2>/dev/null || true; }
+forward_signal() { kill -TERM -- "-$game_pid" 2>/dev/null || true; }
 cleanup_watcher() {
     kill "$runtime_watcher" 2>/dev/null || true
     wait "$runtime_watcher" 2>/dev/null || true

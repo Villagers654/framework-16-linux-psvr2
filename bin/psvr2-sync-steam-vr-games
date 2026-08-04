@@ -18,10 +18,20 @@ WRAPPER = str(HOME / ".local/bin/psvr2-fossvr-run")
 # Hybrid games known to require an explicit VR mode. Add new entries here.
 VR_FLAGS = {
     "1222730": "-vr",                       # STAR WARS: Squadrons
-    "341800": "-steamvr -vrmode openvr",   # Keep Talking and Nobody Explodes
     "732690": "-vr",                       # Five Nights at Freddy's: Help Wanted
 }
-KNOWN = {appid: True for appid in VR_FLAGS}
+
+# Some games advertise Linux support but omit VR from their native Linux depot.
+# Force their Windows build so Steam's /vr launch action reaches xrizer.
+FORCE_PROTON = {
+    "341800": "proton_experimental",       # Keep Talking and Nobody Explodes
+}
+KNOWN = {appid: True for appid in set(VR_FLAGS) | set(FORCE_PROTON)}
+
+KTANE_SETTINGS = (
+    STEAM / "steamapps/compatdata/341800/pfx/drive_c/users/steamuser/AppData/LocalLow"
+    / "Steel Crate Games/Keep Talking and Nobody Explodes/playerSettings.xml"
+)
 
 def steam_running() -> bool:
     for comm in Path("/proc").glob("[0-9]*/comm"):
@@ -52,16 +62,20 @@ def desired_launch(appid: str) -> str:
     suffix = VR_FLAGS.get(appid, "")
     return f"{WRAPPER} %command%" + (f" {suffix}" if suffix else "")
 
+def block_bounds(text: str, header: re.Match[str]) -> tuple[int, int]:
+    start = header.end(); depth = 1; length = 0
+    for line in text[start:].splitlines(keepends=True):
+        depth += line.count("{") - line.count("}"); length += len(line)
+        if depth == 0: break
+    return start, start + length
+
 def patch_localconfig(path: Path, vr_appids: set[str]) -> bool:
     original = path.read_text(errors="strict"); text = original
     for appid in sorted(vr_appids, key=int):
         header = re.search(rf'(?m)^\t{{5}}"{re.escape(appid)}"[ \t]*\n\t{{5}}\{{[ \t]*$', text)
         if not header: continue
-        block_start = header.end(); depth = 1; block_len = 0
-        for line in text[block_start:].splitlines(keepends=True):
-            depth += line.count("{") - line.count("}"); block_len += len(line)
-            if depth == 0: break
-        block_end = block_start + block_len; block = text[block_start:block_end]
+        block_start, block_end = block_bounds(text, header)
+        block = text[block_start:block_end]
         wanted = desired_launch(appid)
         option = re.search(r'(?m)^\t{6}"LaunchOptions"\s+"([^"]*)"\s*$', block)
         if option:
@@ -83,6 +97,56 @@ def patch_localconfig(path: Path, vr_appids: set[str]) -> bool:
         output.write(text); temporary = Path(output.name)
     temporary.chmod(mode); os.replace(temporary, path); return True
 
+def patch_compat_tools(path: Path) -> bool:
+    original = path.read_text(errors="strict"); text = original
+    section = re.search(r'(?m)^\t{4}"CompatToolMapping"[ \t]*\n\t{4}\{[ \t]*$', text)
+    if not section:
+        print(f"PSVR2: CompatToolMapping section not found in {path}", file=sys.stderr)
+        return False
+    section_start, section_end = block_bounds(text, section)
+    block = text[section_start:section_end]
+    for appid, tool in FORCE_PROTON.items():
+        wanted = (
+            f'\t\t\t\t\t"{appid}"\n'
+            '\t\t\t\t\t{\n'
+            f'\t\t\t\t\t\t"name"\t\t"{tool}"\n'
+            '\t\t\t\t\t\t"config"\t\t""\n'
+            '\t\t\t\t\t\t"priority"\t\t"250"\n'
+            '\t\t\t\t\t}\n'
+        )
+        entry = re.search(rf'(?m)^\t{{5}}"{re.escape(appid)}"[ \t]*\n\t{{5}}\{{[ \t]*$', block)
+        if entry:
+            entry_start = entry.start()
+            _, entry_end = block_bounds(block, entry)
+            block = block[:entry_start] + wanted + block[entry_end:]
+        else:
+            closing = block.rfind("\t\t\t\t}")
+            if closing < 0: continue
+            block = block[:closing] + wanted + block[closing:]
+    text = text[:section_start] + block + text[section_end:]
+    if text == original: return False
+    backup = path.with_name(path.name + ".psvr2-auto-backup")
+    if not backup.exists(): backup.write_text(original)
+    mode = stat.S_IMODE(path.stat().st_mode)
+    with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False) as output:
+        output.write(text); temporary = Path(output.name)
+    temporary.chmod(mode); os.replace(temporary, path); return True
+
+def patch_ktane_settings(path: Path) -> bool:
+    """Avoid pacing KTaNE's 120 Hz VR output against its desktop mirror."""
+    if not path.exists(): return False
+    original = path.read_text(errors="strict")
+    text = original.replace("<VSync>1</VSync>", "<VSync>0</VSync>")
+    # Full 170% PSVR2 resolution plus legacy Unity MSAA saturates the RX 7600
+    # path. The 1.7x eye target already supersamples edges, so disable the
+    # redundant pass without changing the 3400x3468 render target.
+    text = re.sub(r"<AntiAliasing>[24]</AntiAliasing>", "<AntiAliasing>0</AntiAliasing>", text)
+    if text == original: return False
+    mode = stat.S_IMODE(path.stat().st_mode)
+    with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False) as output:
+        output.write(text); temporary = Path(output.name)
+    temporary.chmod(mode); os.replace(temporary, path); return True
+
 def main() -> int:
     if steam_running(): return 0
     apps = installed_apps(); cache = dict(KNOWN)
@@ -97,6 +161,9 @@ def main() -> int:
     vr = {appid for appid in apps if cache.get(appid) is True}
     for config in (STEAM / "userdata").glob("[0-9]*/config/localconfig.vdf"):
         patch_localconfig(config, vr)
+    steam_config = STEAM / "config/config.vdf"
+    if steam_config.exists(): patch_compat_tools(steam_config)
+    patch_ktane_settings(KTANE_SETTINGS)
     return 0
 
 if __name__ == "__main__": sys.exit(main())
