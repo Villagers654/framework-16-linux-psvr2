@@ -3,7 +3,17 @@ set -u
 
 drm_root=${PSVR2_DRM_ROOT:-/sys/class/drm}
 suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
+helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
+start_helper="$helper_dir/psvr2-fossvr-start"
+stop_helper="$helper_dir/psvr2-fossvr-stop"
 next_retry=0
+
+for helper in "$start_helper" "$stop_helper"; do
+    if [[ ! -x "$helper" ]]; then
+        echo "Required PSVR2 helper is missing or not executable: $helper" >&2
+        exit 1
+    fi
+done
 
 headset_connected() {
     # The adapter exposes a 12 Mbps USB control function even when the HMD is
@@ -50,11 +60,11 @@ start_runtime() {
         echo "PSVR2 startup attempt $attempt/3"
         sleep 5
         headset_connected || return 1
-        if psvr2-fossvr-start; then
+        if "$start_helper"; then
             return 0
         fi
         echo "PSVR2 runtime was not healthy; retrying after cleanup" >&2
-        PSVR2_AUTOMATED_STOP=1 psvr2-fossvr-stop || true
+        PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
     done
     echo "PSVR2 failed to start after 3 attempts; reconnect it to try again" >&2
     return 1
@@ -82,7 +92,7 @@ while true; do
         else
             echo "PSVR2 USB or DisplayPort disconnected; stopping VR runtime"
             if systemctl --user is-active --quiet psvr2-fossvr.service; then
-                PSVR2_AUTOMATED_STOP=1 psvr2-fossvr-stop || true
+                PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
             fi
             rm -f "$suppress_file"
             next_retry=0
@@ -93,7 +103,7 @@ while true; do
         controllers=$(controller_count)
         if (( controllers > previous_controllers )) && systemctl --user is-active --quiet psvr2-fossvr.service; then
             sleep 2
-            if ! psvr2-fossvr-start; then
+            if ! "$start_helper"; then
                 echo "PSVR2 controller refresh failed; leaving runtime stopped" >&2
             fi
             controllers=$(controller_count)
