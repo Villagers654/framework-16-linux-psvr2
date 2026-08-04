@@ -10,9 +10,13 @@ vrstartup="$steamvr/bin/vrstartup.sh"
 ignition="$sony/bin/linux64/launch_serverhelper.sh"
 webhelper="$steamvr/bin/vrwebhelper/linux64/vrwebhelper"
 settings="$STEAM_ROOT/config/steamvr.vrsettings"
+helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
+lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+exec 8>"$lock_dir/psvr2-fossvr-start.lock"
+flock 8
 
-psvr2-runtime-preflight || true
-psvr2-controller-preflight || true
+"$helper_dir/psvr2-runtime-preflight" || true
+"$helper_dir/psvr2-controller-preflight" || true
 
 # Keep 120 Hz, the runtime-recommended 1.7x target, supersample filtering, and
 # native frames. Linux motion smoothing caused visible ghosting in testing.

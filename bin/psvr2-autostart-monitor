@@ -6,9 +6,10 @@ suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 start_helper="$helper_dir/psvr2-fossvr-start"
 stop_helper="$helper_dir/psvr2-fossvr-stop"
+controller_helper="$helper_dir/psvr2-controller-preflight"
 next_retry=0
 
-for helper in "$start_helper" "$stop_helper"; do
+for helper in "$start_helper" "$stop_helper" "$controller_helper"; do
     if [[ ! -x "$helper" ]]; then
         echo "Required PSVR2 helper is missing or not executable: $helper" >&2
         exit 1
@@ -103,9 +104,8 @@ while true; do
         controllers=$(controller_count)
         if (( controllers > previous_controllers )) && systemctl --user is-active --quiet psvr2-fossvr.service; then
             sleep 2
-            if ! "$start_helper"; then
-                echo "PSVR2 controller refresh failed; leaving runtime stopped" >&2
-            fi
+            "$controller_helper" || true
+            echo "PSVR2 controllers hot-connected; keeping the active runtime"
             controllers=$(controller_count)
         fi
         previous_controllers=$controllers

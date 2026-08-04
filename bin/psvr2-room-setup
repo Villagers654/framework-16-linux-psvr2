@@ -21,9 +21,44 @@ for state_dir in \
     fi
 done
 
+helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
+"$helper_dir/psvr2-fossvr-start"
+
+# The live camera mesh is created from the HMD pose captured when Unity starts.
+# After boot/relocalization the driver can report a valid-looking pose and then
+# jump to its latched map origin. Starting in that window permanently distorts
+# passthrough for this process. Require a stable tracking state and a jump-free
+# settling window before xrizer creates Room Setup's raw reference space.
+service_since=$(systemctl --user show psvr2-fossvr.service \
+    --property=ActiveEnterTimestamp --value)
+tracking_ready=false
+for _ in $(seq 1 60); do
+    last_status=$(journalctl --user -u psvr2-fossvr.service \
+        --since "$service_since" --no-pager 2>/dev/null \
+        | grep 'TrackingStatus' | tail -n 1 || true)
+    if [[ "$last_status" == *'-> stable' ]]; then
+        sleep 3
+        if ! journalctl --user -u psvr2-fossvr.service \
+            --since '4 seconds ago' --no-pager 2>/dev/null \
+            | grep -Eq '\[HMD\] Jump|TrackingStatus.*-> (searching|unstable|lost)|map registration error 0 -> 1'; then
+            tracking_ready=true
+            break
+        fi
+    fi
+    sleep 1
+done
+if [[ "$tracking_ready" != true ]]; then
+    notify-send 'PSVR2 Room Setup' \
+        'Waiting for headset tracking timed out. Look around the room and launch Room Setup again.' \
+        2>/dev/null || true
+    echo 'PSVR2 tracking did not stabilize; refusing to capture a broken camera reference.' >&2
+    exit 1
+fi
+
 export XRIZER_FORCE_HEADSET_ON_HEAD=1
 # The Toolkit camera feed is published in the PSVR2 driver's raw tracking
 # universe.  Scope raw-space emulation to Room Setup; games keep STAGE space.
 export XRIZER_FORCE_RAW_TRACKING_SPACE=1
 export XRIZER_RAW_CHAPERONE_PATH="$STEAM_ROOT/config/playstation_vr2/chaperone_info.vrchap"
-exec psvr2-fossvr-run "$PSVR2_SETUP_ROOT/unity-setup/PSVR2Toolkit.UnitySetup.x86_64"
+exec "$helper_dir/psvr2-fossvr-run" \
+    "$PSVR2_SETUP_ROOT/unity-setup/PSVR2Toolkit.UnitySetup.x86_64"

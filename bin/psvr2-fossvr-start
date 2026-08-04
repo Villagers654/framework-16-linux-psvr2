@@ -2,6 +2,30 @@
 set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
 
+helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
+runtime_preflight="$helper_dir/psvr2-runtime-preflight"
+controller_preflight="$helper_dir/psvr2-controller-preflight"
+audio_helper="$helper_dir/psvr2-audio"
+for helper in "$runtime_preflight" "$controller_preflight" "$audio_helper"; do
+    if [[ ! -x "$helper" ]]; then
+        echo "Required PSVR2 helper is missing or not executable: $helper" >&2
+        exit 1
+    fi
+done
+
+lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+exec 8>"$lock_dir/psvr2-fossvr-start.lock"
+flock 8
+
+socket="$lock_dir/monado_comp_ipc"
+if systemctl --user is-active --quiet psvr2-fossvr.service \
+    && [[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket"; then
+    systemctl --user start psvr2-fossvr-wayvr.service
+    "$audio_helper" vr || true
+    echo "PSVR2 already ready: ${PSVR2_REFRESH_RATE} Hz / ${PSVR2_RENDER_SCALE}% + WayVR."
+    exit 0
+fi
+
 rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 
 "$STEAM_COMMAND" -shutdown-vr >/dev/null 2>&1 || true
@@ -13,11 +37,14 @@ pkill -TERM -f '/SteamVR/bin/linux64/vrcompositor' 2>/dev/null || true
 pkill -TERM -f '/SteamVR/bin/linux64/vrserver' 2>/dev/null || true
 
 systemctl --user stop monado.socket monado.service 2>/dev/null || true
-psvr2-runtime-preflight || true
-psvr2-controller-preflight || true
+"$runtime_preflight"
+if systemctl --user is-active --quiet psvr2-fossvr.service; then
+    echo "Refusing to replace the Monado socket while the PSVR2 service is still active" >&2
+    exit 1
+fi
+"$controller_preflight" || true
 systemctl --user reset-failed psvr2-fossvr.service psvr2-fossvr-wayvr.service 2>/dev/null || true
 
-socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc"
 [[ ! -S "$socket" ]] || unlink "$socket"
 systemctl --user start psvr2-fossvr.service
 service_pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value)
@@ -60,5 +87,5 @@ sleep 1
 systemctl --user is-active --quiet psvr2-fossvr-wayvr.service || {
     journalctl --user -u psvr2-fossvr-wayvr.service -n 60 --no-pager >&2; exit 1;
 }
-psvr2-audio vr || true
+"$audio_helper" vr || true
 echo "PSVR2 ready: ${PSVR2_REFRESH_RATE} Hz / ${PSVR2_RENDER_SCALE}% + WayVR."
