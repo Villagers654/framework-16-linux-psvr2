@@ -14,6 +14,8 @@ check test -x "$HOME/.local/share/psvr2-setup/wayvr/wayvr"
 check test -x "$HOME/.local/share/psvr2-setup/unity-setup/PSVR2Toolkit.UnitySetup.x86_64"
 check test -x "$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
 check test -f "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/release/libxrizer.so"
+check grep -aFq 'Raw tracking space removes PSVR2 chaperone' "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/release/libxrizer.so"
+check grep -Fq 'XRIZER_FORCE_RAW_TRACKING_SPACE=1' "$HOME/.local/bin/psvr2-room-setup"
 check test "$PSVR2_REFRESH_RATE" = 120
 check test "$PSVR2_RENDER_SCALE" = 170
 check test "$PSVR2_SPECTATOR_ENABLE" = 0 -o "$PSVR2_SPECTATOR_ENABLE" = 1

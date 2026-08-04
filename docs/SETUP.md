@@ -58,7 +58,10 @@ repairing BlueZ's rare connected-without-HID state. Do not publish those values.
 Choose **PSVR2 Room Setup** in WayVR's Games grid or launch
 `psvr2-room-setup`. The compatibility layer supplies the HMD proximity signal
 that xrizer cannot currently express, so a centered 2×2 m default polygon is
-created automatically.
+created automatically. Room Setup alone uses xrizer's patched
+`RawAndUncalibrated` space, which removes the saved chaperone transform from
+the HMD pose so the Toolkit's raw passthrough-camera pose stays aligned. Games
+and WayVR continue to use the calibrated STAGE space.
 
 - Trigger: expand when starting inside; erase when starting outside.
 - Grip: set floor in the floor step; grab/move a boundary point in draw mode.
