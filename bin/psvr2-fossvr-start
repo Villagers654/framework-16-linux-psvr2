@@ -2,7 +2,7 @@
 set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
 
-steam -shutdown-vr >/dev/null 2>&1 || true
+"$STEAM_COMMAND" -shutdown-vr >/dev/null 2>&1 || true
 for _ in $(seq 1 50); do
     pgrep -f '/SteamVR/bin/linux64/(vrserver|vrcompositor)' >/dev/null || break
     sleep 0.1

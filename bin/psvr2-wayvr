@@ -2,9 +2,21 @@
 set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
 unset APPIMAGE APPDIR ARGV0 OWD LD_PRELOAD
+export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
+if [[ -n "$AMD_VULKAN_DEVICE" ]]; then
+    export MESA_VK_DEVICE_SELECT="${AMD_VULKAN_DEVICE}!"
+    export MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE=1
+fi
 brew_prefix=$(brew --prefix 2>/dev/null || true)
 if [[ -n "$brew_prefix" ]]; then
     export LD_LIBRARY_PATH="$brew_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+# WayVR's build links libopenvr_api even in OpenXR mode.  Do not depend on an
+# inherited Steam/terminal environment to find it; systemd launches with a
+# deliberately sparse environment.
+openvr_lib="$STEAM_ROOT/steamapps/common/SteamVR/bin/linux64"
+if [[ -d "$openvr_lib" ]]; then
+    export LD_LIBRARY_PATH="$openvr_lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 if [[ -x "$STEAM_ROOT/ubuntu12_32/steam" ]]; then
     export WAYVR_STEAM_COMMAND="$STEAM_ROOT/ubuntu12_32/steam"
