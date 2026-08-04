@@ -10,7 +10,7 @@ if [[ ! -d "$source_dir/.git" ]]; then
   git clone https://github.com/wayvr-org/wayvr "$source_dir"
 fi
 git -C "$source_dir" fetch origin
-git -C "$source_dir" checkout 5723c3c1df31b332a54f59161762d41dd3bd4ff2
+git -C "$source_dir" checkout d93b74cc8aa01ea17d72d46ce016e47286409f92
 git -C "$source_dir" apply --check "$repo/patches/wayvr-psvr2-dashboard.patch" 2>/dev/null && \
   git -C "$source_dir" apply "$repo/patches/wayvr-psvr2-dashboard.patch" || true
 

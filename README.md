@@ -182,7 +182,7 @@ the manual launcher when you want VR again.
 | SteamVRLinuxFixes | `v0.1.4` |
 | Supremium Monado branch | `psvr2-linux-steam-lh` at `8bd01e7edec8028f65c7bff925195f0454d4bc9f` |
 | xrizer | `6c3e45f4c18b014a7aba87282ee0677306315052` |
-| WayVR | `5723c3c1df31b332a54f59161762d41dd3bd4ff2` (26.2.1) |
+| WayVR | `d93b74cc8aa01ea17d72d46ce016e47286409f92` (26.7.1) |
 
 See [docs/UPSTREAM.md](docs/UPSTREAM.md) for links, licenses, and what each
 project contributes.
