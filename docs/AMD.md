@@ -20,3 +20,15 @@ DisplayPort audio when a new stream joins its graph, so the Framework install
 adds LVRA's device-scoped 64-sample period and 512-sample ALSA headroom rule.
 If dropouts remain, double both values together. This rule is AMD/Framework
 specific only because it matches the expansion-bay GPU's stable sink name.
+
+# Reprojection and frame pacing
+
+Monado's compute compositor requires `CAP_SYS_NICE` on AMD so its timewarp
+queue can be prioritized over ordinary rendering. The system installer applies
+that capability to the Envision `monado-service` binary. Re-run the system
+installer after an Envision Clean Build because rebuilding replaces the file.
+
+The Framework helper also selects AMD's actual `VR` firmware power profile
+(not `COMPUTE`) and reserves 8 ms for compositor timewarp at 120 Hz. Override
+the latter with `PSVR2_COMPOSITOR_TIME_MS` only when measuring a different
+value on your GPU.

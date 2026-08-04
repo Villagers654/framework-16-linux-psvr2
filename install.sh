@@ -88,6 +88,18 @@ if $framework; then
     install -m 0644 "$repo_dir/systemd/system/psvr2-dgpu-power.service" /etc/systemd/system/
     install -m 0644 "$repo_dir/udev/71-psvr2-dgpu-power.rules" /etc/udev/rules.d/
 fi
+
+# Monado's compute compositor needs this on AMD so its timewarp queue can run
+# ahead of ordinary rendering work. Envision rebuilds replace the binary, so
+# re-running the system install after a Clean Build reapplies the capability.
+target_user=${SUDO_USER:-}
+if [[ -n "$target_user" ]]; then
+    target_home=$(getent passwd "$target_user" | cut -d: -f6)
+    monado_service="$target_home/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
+    if [[ -x "$monado_service" ]] && command -v setcap >/dev/null 2>&1; then
+        setcap CAP_SYS_NICE=eip "$monado_service"
+    fi
+fi
 systemctl daemon-reload
 udevadm control --reload-rules
 udevadm trigger --subsystem-match=usb

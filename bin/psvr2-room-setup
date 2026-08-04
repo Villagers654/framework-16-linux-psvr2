@@ -69,5 +69,82 @@ export XRIZER_FORCE_HEADSET_ON_HEAD=1
 # universe.  Scope raw-space emulation to Room Setup; games keep STAGE space.
 export XRIZER_FORCE_RAW_TRACKING_SPACE=1
 export XRIZER_RAW_CHAPERONE_PATH="$STEAM_ROOT/config/playstation_vr2/chaperone_info.vrchap"
-exec "$helper_dir/psvr2-fossvr-run" \
-    "$PSVR2_SETUP_ROOT/unity-setup/PSVR2Toolkit.UnitySetup.x86_64"
+
+# Both the SteamVR-driver bridge and xrizer capture the standing/raw transform
+# when their processes start.  Room Setup changes that transform when a wizard
+# finishes.  Continuing in either process after the save mixes the old device
+# origin with the new boundary and can put the floor above the user's head.
+# Watch for a complete, stable chaperone write, close the now-stale setup
+# process, and reload the runtime so every component adopts the same origin.
+chaperone_digest() {
+    if [[ -r "$chaperone" ]]; then
+        sha256sum "$chaperone" | cut -d ' ' -f 1
+    else
+        printf 'missing\n'
+    fi
+}
+
+valid_play_area() {
+    [[ -r "$chaperone" ]] \
+        && grep -Eq '"collision_bounds"[[:space:]]*:[[:space:]]*\[' "$chaperone" \
+        && ! grep -Eq '"play_area"[[:space:]]*:[[:space:]]*\[[[:space:]]*0([.]0+)?[[:space:]]*,[[:space:]]*0([.]0+)?[[:space:]]*\]' "$chaperone"
+}
+
+initial_digest=$(chaperone_digest)
+"$helper_dir/psvr2-fossvr-run" \
+    "$PSVR2_SETUP_ROOT/unity-setup/PSVR2Toolkit.UnitySetup.x86_64" &
+runner_pid=$!
+calibration_changed=false
+candidate_digest=
+stable_checks=0
+
+while kill -0 "$runner_pid" 2>/dev/null; do
+    current_digest=$(chaperone_digest)
+    if [[ "$current_digest" != "$initial_digest" ]] && valid_play_area; then
+        if [[ "$current_digest" == "$candidate_digest" ]]; then
+            ((stable_checks += 1))
+        else
+            candidate_digest=$current_digest
+            stable_checks=1
+        fi
+        if (( stable_checks >= 6 )); then
+            calibration_changed=true
+            kill -TERM "$runner_pid" 2>/dev/null || true
+            break
+        fi
+    else
+        candidate_digest=
+        stable_checks=0
+    fi
+    sleep 0.5
+done
+
+set +e
+wait "$runner_pid"
+setup_status=$?
+set -e
+
+if [[ "$calibration_changed" == true ]]; then
+    notify-send 'PSVR2 play area saved' \
+        'Reloading the VR origin and returning to WayVR.' 2>/dev/null || true
+    "$helper_dir/psvr2-fossvr-stop"
+    # The proprietary driver releases several PSVR2 USB interfaces
+    # asynchronously.  Give them time to settle before reacquiring the HMD.
+    sleep 6
+    started=false
+    for _ in 1 2 3; do
+        if "$helper_dir/psvr2-fossvr-start"; then
+            started=true
+            break
+        fi
+        sleep 5
+    done
+    if [[ "$started" != true ]]; then
+        notify-send -u critical 'PSVR2 reload failed' \
+            'Power-cycle the headset, then run psvr2-fossvr-start.' 2>/dev/null || true
+        exit 1
+    fi
+    exit 0
+fi
+
+exit "$setup_status"

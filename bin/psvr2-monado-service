@@ -19,6 +19,9 @@ fi
 export XRT_COMPOSITOR_FORCE_VK_DISPLAY=0
 export XRT_COMP_FRAME_LAG_LOG_AS_LEVEL=debug
 export U_PACING_APP_USE_MIN_FRAME_PERIOD=1
+# Reserve enough of each 8.34 ms frame for AMD timewarp/reprojection. Monado's
+# 4 ms default can miss the 120 Hz deadline under otherwise-manageable load.
+export U_PACING_COMP_MIN_TIME_MS="${PSVR2_COMPOSITOR_TIME_MS:-8}"
 export XRT_NO_STDIN=1
 export IPC_EXIT_ON_DISCONNECT=OFF
 if [[ -n "$AMD_VULKAN_DEVICE" ]]; then
