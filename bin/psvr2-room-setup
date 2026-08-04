@@ -1,5 +1,59 @@
 #!/usr/bin/bash
 set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
+
+# UnitySetup can retain a bad initial camera/reference transform in its
+# per-application Unity state after an interrupted run or tracking-origin
+# transition. This is disposable app state: the SLAM map and play area are
+# stored by the PSVR2 driver elsewhere. Start clean and reject double launches.
+lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+exec 9>"$lock_dir/psvr2-room-setup.lock"
+if ! flock -n 9; then
+    echo "PSVR2 Room Setup is already running." >&2
+    exit 0
+fi
+
+for state_dir in \
+    "$HOME/.config/unity3d/Bnuuy Solutions/PSVR2Toolkit.UnitySetup" \
+    "$HOME/.cache/unity3d/Bnuuy Solutions/PSVR2Toolkit.UnitySetup"; do
+    if [[ -d "$state_dir" ]]; then
+        find "$state_dir" -mindepth 1 -delete
+    fi
+done
+
+# UnitySetup samples the raw camera pose as it creates its OpenVR reference
+# space. Launching while PSVR2 is still relocalizing permanently offsets or
+# reverses passthrough for that process. Start Monado first, then require a
+# stable, latched world pose and a short jump-free settling window.
+if ! systemctl --user is-active --quiet psvr2-fossvr.service ||
+   ! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then
+    psvr2-fossvr-start
+fi
+
+service_since=$(systemctl --user show psvr2-fossvr.service \
+    --property=ActiveEnterTimestamp --value)
+tracking_ready=false
+for _ in $(seq 1 90); do
+    last_status=$(journalctl --user -u psvr2-fossvr.service \
+        --since "$service_since" --no-pager 2>/dev/null |
+        grep 'TrackingStatus' | tail -n 1 || true)
+    if [[ "$last_status" == *'-> stable' ]]; then
+        sleep 3
+        if ! journalctl --user -u psvr2-fossvr.service \
+            --since '4 seconds ago' --no-pager 2>/dev/null |
+            grep -Eq '\[HMD\] Jump|TrackingStatus.*-> (searching|unstable|lost)'; then
+            tracking_ready=true
+            break
+        fi
+    fi
+    sleep 1
+done
+if [[ "$tracking_ready" != true ]]; then
+    notify-send 'PSVR2 Room Setup' \
+        'Tracking did not stabilize. Look around the room, then launch Room Setup again.' 2>/dev/null || true
+    echo 'PSVR2 tracking did not stabilize; refusing to launch Room Setup with a bad reference transform.' >&2
+    exit 1
+fi
+
 export XRIZER_FORCE_HEADSET_ON_HEAD=1
 exec psvr2-fossvr-run "$PSVR2_SETUP_ROOT/unity-setup/PSVR2Toolkit.UnitySetup.x86_64"
