@@ -143,7 +143,7 @@ controller pairing, read [docs/SETUP.md](docs/SETUP.md).
   app grid also contains **Toggle PSVR2 Spectator View**.
 - Turn controllers on afterward: the monitor detects them and refreshes Monado.
 - Press either PS button: show or hide the WayVR dashboard.
-- Press either PS button, then pull either trigger within two seconds: save the VR mirror to
+- Press either PS button, then pull either trigger within half a second: save the VR mirror to
   `~/Pictures/VR Screenshots/`.
 - Select **Games**: only detected Steam VR titles are listed.
 - Select **PSVR2 Room Setup**: run full room-scale calibration from the headset.

@@ -110,7 +110,7 @@ timing matter. Leave the global default at 170% and change individual games.
 
 ## Screenshot chord does nothing
 
-Press either PS button, then pull either trigger within two seconds. The helper
+Press either PS button, then pull either trigger within half a second. The helper
 targets an XWayland VR mirror, validates the resulting PNG, and refuses to fall
 back to an unrelated desktop window. Check `wmctrl -lGpx`, run
 `psvr2-screenshot --print-window` to inspect the selected mirror, and run

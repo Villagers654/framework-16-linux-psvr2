@@ -100,7 +100,7 @@ clock, and all of a game's Proton/Wine children are terminated if the headset
 disconnects rather than lingering under the WayVR dashboard.
 
 - PS button: toggle the WayVR dashboard.
-- Press either PS button, then pull either trigger within two seconds: save the current XWayland VR mirror to
+- Press either PS button, then pull either trigger within half a second: save the current XWayland VR mirror to
   `~/Pictures/VR Screenshots/`.
 - Manual start/stop: `psvr2-fossvr-start` / `psvr2-fossvr-stop`.
 
