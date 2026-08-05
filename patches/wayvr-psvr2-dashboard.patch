@@ -118,26 +118,70 @@ index d2c475e..b727d6a 100644
          enabled_extensions.other.push(xr_extension);
      }
 diff --git a/wayvr/src/backend/openxr/mod.rs b/wayvr/src/backend/openxr/mod.rs
-index af703ab..b2d9960 100644
+index af703abc..2cf69bee 100644
 --- a/wayvr/src/backend/openxr/mod.rs
 +++ b/wayvr/src/backend/openxr/mod.rs
-@@ -275,7 +275,25 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+@@ -41,6 +41,39 @@ mod skybox;
+ mod swapchain;
+ 
+ const VIEW_TYPE: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_STEREO;
++const SCREENSHOT_CHORD_WINDOW: Duration = Duration::from_secs(2);
++
++#[derive(Default)]
++struct ScreenshotChord {
++    ps_pressed_at: Option<Instant>,
++    trigger_was_held: bool,
++}
++
++impl ScreenshotChord {
++    fn update(&mut self, ps_started: bool, trigger_held: bool, now: Instant) -> bool {
++        if ps_started {
++            self.ps_pressed_at = Some(now);
++        }
++
++        let trigger_started = trigger_held && !self.trigger_was_held;
++        self.trigger_was_held = trigger_held;
++        let armed = self
++            .ps_pressed_at
++            .is_some_and(|pressed| now.duration_since(pressed) <= SCREENSHOT_CHORD_WINDOW);
++
++        if trigger_started && armed {
++            self.ps_pressed_at = None;
++            true
++        } else {
++            if self.ps_pressed_at.is_some_and(|pressed| {
++                now.duration_since(pressed) > SCREENSHOT_CHORD_WINDOW
++            }) {
++                self.ps_pressed_at = None;
++            }
++            false
++        }
++    }
++}
+ 
+ struct XrState {
+     instance: xr::Instance,
+@@ -150,6 +183,7 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+     let mut main_session_visible = false;
+     let mut environment_blend_mode = modes[0];
+     let mut last_frame_time = Instant::now();
++    let mut screenshot_chord = ScreenshotChord::default();
+ 
+     'main_loop: loop {
+         let now = Instant::now();
+@@ -275,7 +309,21 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
              blocker.update(&mut app);
          }
  
 -        if app
-+        let ps_button_held = app
++        let ps_button_started = app
 +            .input_state
 +            .pointers
 +            .iter()
-+            .any(|p| p.now.toggle_dashboard);
++            .any(|p| p.now.toggle_dashboard && !p.before.toggle_dashboard);
 +        let trigger_held = app.input_state.pointers.iter().any(|p| p.now.click);
-+        let screenshot_chord_started = ps_button_held
-+            && trigger_held
-+            && app.input_state.pointers.iter().any(|p| {
-+                (p.now.toggle_dashboard && !p.before.toggle_dashboard)
-+                    || (p.now.click && !p.before.click)
-+            });
++        let screenshot_chord_started =
++            screenshot_chord.update(ps_button_started, trigger_held, Instant::now());
 +
 +        if screenshot_chord_started {
 +            log::info!("PSVR2 screenshot chord pressed");
@@ -148,7 +192,7 @@ index af703ab..b2d9960 100644
              .input_state
              .pointers
              .iter()
-@@ -284,7 +302,8 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+@@ -284,7 +332,8 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
              overlays.show_hide(&mut app);
          }
  
@@ -158,6 +202,51 @@ index af703ab..b2d9960 100644
              .input_state
              .pointers
              .iter()
+@@ -534,6 +583,44 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+     Ok(())
+ }
+ 
++#[cfg(test)]
++mod screenshot_chord_tests {
++    use super::*;
++
++    #[test]
++    fn ps_pulse_then_trigger_captures() {
++        let start = Instant::now();
++        let mut chord = ScreenshotChord::default();
++        assert!(!chord.update(true, false, start));
++        assert!(!chord.update(false, false, start + Duration::from_millis(100)));
++        assert!(chord.update(false, true, start + Duration::from_millis(500)));
++    }
++
++    #[test]
++    fn trigger_without_ps_does_not_capture() {
++        let mut chord = ScreenshotChord::default();
++        assert!(!chord.update(false, true, Instant::now()));
++    }
++
++    #[test]
++    fn expired_ps_press_does_not_capture() {
++        let start = Instant::now();
++        let mut chord = ScreenshotChord::default();
++        assert!(!chord.update(true, false, start));
++        assert!(!chord.update(false, true, start + Duration::from_secs(3)));
++    }
++
++    #[test]
++    fn one_ps_press_captures_only_once() {
++        let start = Instant::now();
++        let mut chord = ScreenshotChord::default();
++        assert!(!chord.update(true, false, start));
++        assert!(chord.update(false, true, start + Duration::from_millis(100)));
++        assert!(!chord.update(false, false, start + Duration::from_millis(200)));
++        assert!(!chord.update(false, true, start + Duration::from_millis(300)));
++    }
++}
++
+ pub(super) enum CompositionLayer<'a> {
+     Quad(xr::CompositionLayerQuad<'a, xr::Vulkan>),
+     Cylinder(xr::CompositionLayerCylinderKHR<'a, xr::Vulkan>),
 diff --git a/wlx-common/assets/openxr_actions.json5 b/wlx-common/assets/openxr_actions.json5
 index 155cfb8..aa871c7 100644
 --- a/wlx-common/assets/openxr_actions.json5

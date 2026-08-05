@@ -110,6 +110,11 @@ timing matter. Leave the global default at 170% and change individual games.
 
 ## Screenshot chord does nothing
 
-The helper targets an XWayland VR mirror. Check `wmctrl -lGpx` and run
-`psvr2-screenshot` directly. Native Wayland games without a mirror need their
-own screenshot feature. Files are saved under `~/Pictures/VR Screenshots/`.
+Press either PS button, then pull either trigger within two seconds. The helper
+targets an XWayland VR mirror, validates the resulting PNG, and refuses to fall
+back to an unrelated desktop window. Check `wmctrl -lGpx`, run
+`psvr2-screenshot --print-window` to inspect the selected mirror, and run
+`psvr2-screenshot` directly to test capture. Successful captures are logged in
+the user journal under the `psvr2-screenshot` tag and saved under
+`~/Pictures/VR Screenshots/`. Native Wayland games without a mirror need their
+own screenshot feature.

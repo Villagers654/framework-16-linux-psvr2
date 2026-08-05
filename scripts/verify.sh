@@ -9,8 +9,11 @@ failed=0
 check() { if "$@"; then printf 'OK   %s\n' "$*"; else printf 'FAIL %s\n' "$*"; failed=1; fi; }
 check test -x "$HOME/.local/bin/psvr2-fossvr-start"
 check test -x "$HOME/.local/bin/psvr2-screenshot"
+check bash -c 'test "$(PSVR2_SCREENSHOT_WINDOW_LIST="$1" "$HOME/.local/bin/psvr2-screenshot" --print-window)" = 0x1' _ \
+    '0x1 0 1 0 0 3840 2400 game.Game host VR Game'
 check test -x "$HOME/.local/bin/psvr2-spectator"
 check test -x "$HOME/.local/share/psvr2-setup/wayvr/wayvr"
+check grep -aFq 'PSVR2 screenshot chord pressed' "$HOME/.local/share/psvr2-setup/wayvr/wayvr"
 check test -x "$HOME/.local/share/psvr2-setup/unity-setup/PSVR2Toolkit.UnitySetup.x86_64"
 check test -x "$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
 check test -f "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/release/libxrizer.so"

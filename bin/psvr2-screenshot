@@ -3,19 +3,34 @@ set -euo pipefail
 
 command -v wmctrl >/dev/null || { echo "wmctrl is required" >&2; exit 1; }
 command -v import >/dev/null || { echo "ImageMagick 'import' is required" >&2; exit 1; }
+command -v identify >/dev/null || { echo "ImageMagick 'identify' is required" >&2; exit 1; }
+
+fail() {
+    logger -t psvr2-screenshot "failed: $*"
+    notify-send -u critical -a PSVR2 -i dialog-error "VR screenshot failed" "$*" 2>/dev/null || true
+    printf '%s\n' "$*" >&2
+    exit 1
+}
 
 output_dir="${XDG_PICTURES_DIR:-$HOME/Pictures}/VR Screenshots"
 mkdir -p "$output_dir"
-timestamp=$(date +%Y-%m-%d_%H-%M-%S)
+timestamp=$(date +%Y-%m-%d_%H-%M-%S-%N)
 output="$output_dir/PSVR2-$timestamp.png"
 
 # Prefer the PSVR2 utility; otherwise choose the largest visible XWayland
 # application window that is not Steam, WayVR, or the desktop shell. Proton
 # VR games are XWayland applications in the tested Bazzite configuration.
-window=$(wmctrl -lGpx | awk '
+window_list=${PSVR2_SCREENSHOT_WINDOW_LIST:-}
+if [[ -n "$window_list" ]]; then
+    windows=$window_list
+else
+    windows=$(wmctrl -lGpx)
+fi
+
+window=$(awk '
   BEGIN { best=0; id="" }
   {
-    area=$5*$6; class=tolower($8); title="";
+    area=$6*$7; class=tolower($8); title="";
     for (i=10; i<=NF; i++) title=title (i==10 ? "" : " ") $i;
     low=tolower(title);
     if (low ~ /psvr2toolkit\.unitysetup/) { print $1; exit }
@@ -24,12 +39,27 @@ window=$(wmctrl -lGpx | awk '
     if (area > best) { best=area; id=$1 }
   }
   END { if (id != "") print id }
-' | head -n1)
+' <<<"$windows" | head -n1)
 
 if [[ -z "$window" ]]; then
-    window=$(xdotool getactivewindow)
+    fail "No capturable XWayland VR mirror was found"
 fi
 
-import -silent -window "$window" "$output"
+if [[ ${1:-} == "--print-window" ]]; then
+    printf '%s\n' "$window"
+    exit 0
+fi
+
+if ! import -silent -window "$window" "$output"; then
+    fail "ImageMagick could not capture VR mirror $window"
+fi
+if ! dimensions=$(identify -format '%w %h' "$output"); then
+    fail "The captured PNG could not be validated"
+fi
+read -r width height <<<"$dimensions"
+if (( width < 64 || height < 64 )); then
+    fail "Screenshot capture was unexpectedly small: ${width}x${height}"
+fi
+logger -t psvr2-screenshot "saved window=$window size=${width}x${height} path=$output"
 notify-send -a PSVR2 -i camera-photo "VR screenshot saved" "$output" 2>/dev/null || true
 printf '%s\n' "$output"
