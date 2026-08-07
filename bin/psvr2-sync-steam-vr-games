@@ -21,6 +21,12 @@ if CONFIG.exists():
         STEAM = Path(os.path.expandvars(match.group(1))).expanduser()
 STATE = HOME / ".local/share/psvr2-setup/steam-vr-apps.json"
 WRAPPER = str(HOME / ".local/bin/psvr2-fossvr-run")
+FORCE_VR_IDS = ""
+if CONFIG.exists():
+    text = CONFIG.read_text()
+    match = re.search(r'^PSVR2_FORCE_VR_IDS="?([^"\n]+)', text, re.M)
+    if match:
+        FORCE_VR_IDS = match.group(1)
 
 # Hybrid games known to require an explicit VR mode. Add new entries here.
 VR_FLAGS = {
@@ -175,15 +181,51 @@ def main() -> int:
     parser.add_argument("--force", action="store_true", help="Allow launch-option patching while Steam is running.")
     args = parser.parse_args()
 
-    apps = installed_apps(); cache = dict(KNOWN)
-    try: cache.update(json.loads(STATE.read_text()))
-    except (FileNotFoundError, json.JSONDecodeError): pass
+    apps = installed_apps()
+    cache = dict(KNOWN)
+    try:
+        cache.update(json.loads(STATE.read_text()))
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+
+    # Re-check every installed entry that isn't already known-good to recover from
+    # one-off store query failures and prevent stale false entries from blocking
+    # newly-installed titles.
     for appid in apps:
-        if appid not in cache:
-            try: cache[appid] = store_says_vr(appid)
-            except Exception: continue
+        if cache.get(appid, False):
+            continue
+
+        try:
+            cache[appid] = store_says_vr(appid)
+        except Exception:
+            # Preserve explicit positive/negative states when API calls fail.
+            if appid not in cache:
+                cache[appid] = False
+
+    # Keep cache entries only for currently-installed applications (plus known
+    # helper entries) so stale IDs don't linger and accidentally block future
+    # lookups after app uninstalls.
+    installed_set = set(apps)
+    for cached_appid in list(cache.keys()):
+        if cached_appid in KNOWN:
+            continue
+        if cached_appid not in installed_set:
+            cache.pop(cached_appid, None)
+
+    # Optional environment variable or settings.env override for manual cases where
+    # Steam API metadata is temporarily incomplete. Add app IDs with
+    # comma-separated values.
+    extra_ids = os.environ.get("PSVR2_FORCE_VR_IDS", FORCE_VR_IDS)
+    for appid in (value.strip() for value in extra_ids.split(",") if value.strip()):
+        cache[appid] = True
+
+    # Persist a deterministic cache for WayVR so startup behavior does not depend
+    # on how long Steam has had to settle after installation or launch.
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps(cache, indent=2, sort_keys=True) + "\n")
+
+    print(f"PSVR2: synced {len(cache)} steam ids, {sum(1 for v in cache.values() if v)} vr-enabled")
+
     patch_launch_options = (not args.discovery_only) and (args.force or not steam_running())
     vr = {appid for appid in apps if cache.get(appid) is True}
     if patch_launch_options:
