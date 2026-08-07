@@ -1,5 +1,5 @@
 diff --git a/src/openxr_data.rs b/src/openxr_data.rs
-index 4a913a5..2e9d92b 100644
+index 4a913a5..f93ef07 100644
 --- a/src/openxr_data.rs
 +++ b/src/openxr_data.rs
 @@ -199,6 +199,19 @@ fn raw_tracking_space_pose() -> xr::Posef {
@@ -22,7 +22,7 @@ index 4a913a5..2e9d92b 100644
  impl<C: Compositor> OpenXrData<C> {
      pub fn new(injector: &Injector) -> Result<Self, InitError> {
          #[cfg(all(not(test), feature = "static-openxr"))]
-@@ -273,11 +286,13 @@ impl<C: Compositor> OpenXrData<C> {
+@@ -273,12 +286,13 @@ impl<C: Compositor> OpenXrData<C> {
          // this xrizer instance, so allow its launcher to select raw space at
          // instance creation. Keep the normal standing origin for every other
          // application.
@@ -31,6 +31,7 @@ index 4a913a5..2e9d92b 100644
 -        } else {
 -            vr::ETrackingUniverseOrigin::Standing
 -        };
+-
 +        let initial_origin = resolve_tracking_origin(
 +            if std::env::var_os("XRIZER_FORCE_RAW_TRACKING_SPACE").is_some() {
 +                vr::ETrackingUniverseOrigin::RawAndUncalibrated
@@ -38,19 +39,10 @@ index 4a913a5..2e9d92b 100644
 +                vr::ETrackingUniverseOrigin::Standing
 +            },
 +        );
- 
          let session_data = SessionReadGuard(RwLock::new(ManuallyDrop::new(
              SessionData::new(
-@@ -343,7 +358,7 @@ impl<C: Compositor> OpenXrData<C> {
-         let mut session_guard = self.session_data.0.write().unwrap();
-         self.end_session(&mut session_guard);
- 
--        let origin = session_guard.current_origin;
-+        let origin = resolve_tracking_origin(session_guard.current_origin);
-         let comp = self
-             .compositor
-             .get()
-@@ -368,7 +383,23 @@ impl<C: Compositor> OpenXrData<C> {
+                 &instance,
+@@ -368,7 +382,23 @@ impl<C: Compositor> OpenXrData<C> {
      }
  
      pub fn set_tracking_space(&self, space: vr::ETrackingUniverseOrigin) {
@@ -75,43 +67,3 @@ index 4a913a5..2e9d92b 100644
      }
  
      pub fn get_tracking_space(&self) -> vr::ETrackingUniverseOrigin {
-@@ -376,6 +407,7 @@ impl<C: Compositor> OpenXrData<C> {
-     }
- 
-     pub fn reset_tracking_space(&self, origin: vr::ETrackingUniverseOrigin) {
-+        let origin = resolve_tracking_origin(origin);
-         let mut guard = self.session_data.0.write().unwrap();
-         let SessionData {
-             session,
-@@ -754,7 +786,7 @@ impl SessionData {
- 
-     #[inline]
-     pub fn get_space_for_origin(&self, origin: vr::ETrackingUniverseOrigin) -> &xr::Space {
--        match origin {
-+        match resolve_tracking_origin(origin) {
-             vr::ETrackingUniverseOrigin::Seated => &self.local_space_adjusted,
-             vr::ETrackingUniverseOrigin::Standing => &self.stage_space_adjusted,
-             vr::ETrackingUniverseOrigin::RawAndUncalibrated => {
-@@ -765,11 +797,12 @@ impl SessionData {
- 
-     #[inline]
-     pub fn get_space_from_type(&self, ty: xr::ReferenceSpaceType) -> &xr::Space {
-+        let current_origin = resolve_tracking_origin(self.current_origin);
-         match ty {
-             xr::ReferenceSpaceType::VIEW => &self.view_space,
-             xr::ReferenceSpaceType::LOCAL => &self.local_space_adjusted,
-             xr::ReferenceSpaceType::STAGE
--                if self.current_origin == vr::ETrackingUniverseOrigin::RawAndUncalibrated =>
-+                if current_origin == vr::ETrackingUniverseOrigin::RawAndUncalibrated =>
-             {
-                 &self.raw_space
-             }
-@@ -780,7 +813,7 @@ impl SessionData {
- 
-     #[inline]
-     pub fn current_origin_as_reference_space(&self) -> xr::ReferenceSpaceType {
--        match self.current_origin {
-+        match resolve_tracking_origin(self.current_origin) {
-             vr::ETrackingUniverseOrigin::Seated => xr::ReferenceSpaceType::LOCAL,
-             vr::ETrackingUniverseOrigin::Standing => xr::ReferenceSpaceType::STAGE,
-             vr::ETrackingUniverseOrigin::RawAndUncalibrated => {

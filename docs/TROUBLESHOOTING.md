@@ -68,16 +68,17 @@ only when `psvr2-room-setup` sets `XRIZER_FORCE_HEADSET_ON_HEAD=1`.
 ## Room Setup UI tracks correctly but passthrough is beside or behind you
 
 This is a raw-versus-standing tracking-universe mismatch, not lost Monado
-tracking, a damaged play area, or a frozen camera. Monado's SteamVR-driver
-bridge loads `chaperone_info.vrchap` at service startup and applies its saved
-standing yaw/translation to HMD and controller poses. The Toolkit camera feed
-remains in the driver's raw tracking universe. Upstream xrizer currently maps
-OpenVR `RawAndUncalibrated` to STAGE, so the problem appears only after a room
+tracking, a damaged play area, or a frozen camera. The PSVR2 Room Setup app
+writes `chaperone_info.vrchap` for each saved play area. Monado's SteamVR-driver
+loads that file at service startup and applies its saved standing yaw/
+translation to HMD and controller poses. The camera feed is published in the
+driver's raw tracking universe. Upstream xrizer currently maps OpenVR
+`RawAndUncalibrated` to STAGE, so the problem appears only after a room
 calibration has been saved and the runtime restarted.
 
 This repository's xrizer patch implements a dedicated raw space by removing
 that exact saved chaperone transform. `psvr2-room-setup` enables it only for
-UnitySetup; normal applications keep calibrated STAGE coordinates. Re-run
+Room Setup; normal applications keep calibrated STAGE coordinates. Re-run
 `./scripts/prepare-envision-runtime.sh`, rebuild the Envision profile, and then
 `./install.sh --user` if the symptom returns after replacing the runtime.
 Do not delete the calibrated play area or patch Unity's `GameAssembly.so`.

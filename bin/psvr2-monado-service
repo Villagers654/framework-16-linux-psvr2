@@ -2,7 +2,15 @@
 set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
 
-export LH_LOAD_PSVR2=1
+# Keep SteamVR Lighthouse helpers disabled unless explicitly enabled.
+export STEAMVR_LH_ENABLE="${PSVR2_ENABLE_STEAMVR_LH:-0}"
+if [[ "${PSVR2_ENABLE_STEAMVR_LH:-0}" == "1" ]]; then
+    export LH_LOAD_PSVR2=true
+    export LH_LOAD_LIGHTHOUSE=true
+else
+    export LH_LOAD_PSVR2=false
+    export LH_LOAD_LIGHTHOUSE=false
+fi
 export LH_DISCOVER_WAIT_MS=5000
 export XRT_COMPOSITOR_SCALE_PERCENTAGE="$PSVR2_RENDER_SCALE"
 export XRT_COMPOSITOR_COMPUTE=1

@@ -7,7 +7,7 @@ Conflicts=monado.service monado.socket
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/psvr2-monado-service
-Restart=on-failure
+Restart=no
 RestartSec=2
 TimeoutStopSec=10
 KillMode=control-group

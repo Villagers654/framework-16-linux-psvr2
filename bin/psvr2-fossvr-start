@@ -28,13 +28,15 @@ fi
 
 rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 
-"$STEAM_COMMAND" -shutdown-vr >/dev/null 2>&1 || true
-for _ in $(seq 1 50); do
-    pgrep -f '/SteamVR/bin/linux64/(vrserver|vrcompositor)' >/dev/null || break
-    sleep 0.1
-done
-pkill -TERM -f '/SteamVR/bin/linux64/vrcompositor' 2>/dev/null || true
-pkill -TERM -f '/SteamVR/bin/linux64/vrserver' 2>/dev/null || true
+if [[ "${PSVR2_ENABLE_STEAMVR_BRIDGE:-0}" == "1" ]]; then
+    "$STEAM_COMMAND" -shutdown-vr >/dev/null 2>&1 || true
+    for _ in $(seq 1 50); do
+        pgrep -f '/SteamVR/bin/linux64/(vrserver|vrcompositor)' >/dev/null || break
+        sleep 0.1
+    done
+    pkill -TERM -f '/SteamVR/bin/linux64/vrcompositor' 2>/dev/null || true
+    pkill -TERM -f '/SteamVR/bin/linux64/vrserver' 2>/dev/null || true
+fi
 
 systemctl --user stop monado.socket monado.service 2>/dev/null || true
 "$runtime_preflight"

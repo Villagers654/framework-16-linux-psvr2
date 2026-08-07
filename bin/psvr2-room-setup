@@ -92,6 +92,8 @@ valid_play_area() {
         && ! grep -Eq '"play_area"[[:space:]]*:[[:space:]]*\[[[:space:]]*0([.]0+)?[[:space:]]*,[[:space:]]*0([.]0+)?[[:space:]]*\]' "$chaperone"
 }
 
+initial_digest=$(chaperone_digest)
+
 env "${roomsetup_env[@]}" \
     "$helper_dir/psvr2-fossvr-run" \
     "$PSVR2_SETUP_ROOT/unity-setup/PSVR2Toolkit.UnitySetup.x86_64" &
