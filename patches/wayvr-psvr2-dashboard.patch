@@ -18,16 +18,15 @@ index a2f9c4d..a4b47d7 100644
  
  		let id_label_time = state.get_widget_id("label_time")?;
 diff --git a/dash-frontend/src/util/steam_utils.rs b/dash-frontend/src/util/steam_utils.rs
-index 56ce0bb..5fe5e01 100644
+index 56ce0bb..9ecd5d08 100644
 --- a/dash-frontend/src/util/steam_utils.rs
 +++ b/dash-frontend/src/util/steam_utils.rs
 @@ -1,5 +1,6 @@
  use keyvalues_parser::{Obj, Vdf};
  use serde::{Deserialize, Serialize};
-+use std::collections::HashMap;
++use std::collections::{HashMap, HashSet};
  use std::path::PathBuf;
- 
- #[derive(Clone)]
++use std::path::Path;
 @@ -24,6 +25,9 @@ fn get_steam_root() -> anyhow::Result<PathBuf> {
  
  pub type AppID = String;
@@ -38,7 +37,44 @@ index 56ce0bb..5fe5e01 100644
  #[derive(Clone, Debug, Serialize, Deserialize)]
  pub struct AppManifest {
  	pub app_id: AppID,
-@@ -127,7 +131,12 @@ struct AppEntry {
+@@ -50,6 +54,37 @@ fn get_str_first<'a>(obj: &'a Obj<'_>, key: &str) -> Option<&'a str> {
+ 	obj.get(key)?.first()?.get_str()
+ }
++
++fn get_library_folders(vdf_root: &Vdf<'_>) -> Vec<String> {
++	let mut roots = Vec::<String>::new();
++	let obj_libraryfolders = match vdf_root.value.get_obj() {
++		Some(obj) => obj,
++		None => return roots,
++	};
++
++	let mut num = 0;
++	#[allow(clippy::while_let_loop)]
++	loop {
++		let Some(library_folder) = get_obj_first(obj_libraryfolders, format!("{}", num).as_str()) else {
++			break;
++		};
++		let Some(path) = get_str_first(library_folder, "path") else {
++			num += 1;
++			continue;
++		};
++		let expanded = match path.strip_prefix('~') {
++			Some(rest) => {
++				let home = std::env::var("HOME").unwrap_or_default();
++				format!("{}{}", home, rest)
++			}
++			None => path.to_string(),
++		};
++		roots.push(expanded.replace("\\", "/").replace('\\', "/"));
++		num += 1;
++	}
++
++	roots
++}
+ 
+ fn vdf_parse_libraryfolders<'a>(vdf_root: &'a Vdf<'a>) -> Option<Vec<AppEntry>> {
+ 	let obj_libraryfolders = vdf_root.value.get_obj()?;
+@@ -127,7 +162,12 @@ struct AppEntry {
  
  pub fn launch(app_id: &AppID) -> anyhow::Result<()> {
  	log::info!("Launching Steam game with AppID {}", app_id);
@@ -51,8 +87,7 @@ index 56ce0bb..5fe5e01 100644
 +	call_steam(&format!("steam://launch/{}/vr", app_id))?;
  	Ok(())
  }
- 
-@@ -224,13 +233,9 @@ pub fn list_running_games() -> anyhow::Result<Vec<RunningGame>> {
+@@ -224,13 +264,9 @@ pub fn list_running_games() -> anyhow::Result<Vec<RunningGame>> {
  }
  
  fn call_steam(arg: &str) -> anyhow::Result<()> {
@@ -69,10 +104,96 @@ index 56ce0bb..5fe5e01 100644
  }
  
  impl SteamUtils {
-@@ -286,6 +291,22 @@ impl SteamUtils {
- 			})
- 			.collect();
+@@ -258,6 +294,22 @@ impl SteamUtils {
+ 		Ok(manifest)
+ 	}
++
++	fn get_app_manifest_from_path(&self, path: &Path) -> anyhow::Result<AppManifest> {
++		let stem = path
++			.file_stem()
++			.and_then(|s| s.to_str())
++			.and_then(|stem| stem.strip_prefix("appmanifest_"))
++			.ok_or_else(|| anyhow::anyhow!("Invalid appmanifest filename: {:?}", path))?;
++		let app_id = stem.to_string();
++		let vdf_data = std::fs::read_to_string(path)?;
++		let vdf_root = keyvalues_parser::Vdf::parse(&vdf_data)?;
++		let Some(manifest) = vdf_parse_appstate(app_id.clone(), &vdf_root) else {
++			anyhow::bail!("Failed to parse AppState");
++		};
++
++		Ok(manifest)
++	}
  
+ 	pub fn list_installed_games(&self, sort_method: GameSortMethod) -> anyhow::Result<Vec<AppManifest>> {
+ 		let path = self.get_dir_steamapps().join("libraryfolders.vdf");
+ 		let vdf_data = std::fs::read_to_string(path)?;
+@@ -268,7 +320,39 @@ impl SteamUtils {
+ 		let Some(apps) = vdf_parse_libraryfolders(&vdf_root) else {
+ 			anyhow::bail!("Failed to fetch installed Steam apps");
+ 		};
+ 
+-		let mut games: Vec<AppManifest> = apps
++		let mut steamapp_paths = HashSet::<PathBuf>::new();
++		let mut library_roots = get_library_folders(&vdf_root)
++			.into_iter()
++			.map(PathBuf::from)
++			.collect::<Vec<_>>();
++		if library_roots.is_empty() {
++			library_roots.push(self.steam_root.clone());
++		}
++
++		for root in &library_roots {
++			let Ok(entries) = std::fs::read_dir(root.join("steamapps")) else {
++				continue;
++			};
++			for entry in entries.flatten() {
++				let path = entry.path();
++				let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
++					continue;
++				};
++				if !file_name.starts_with("appmanifest_") || !file_name.ends_with(".acf") {
++					continue;
++				}
++				steamapp_paths.insert(path);
++			}
++		}
++
++		// Include any valid manifest under the configured steamapps root to handle stale
++		// or incomplete libraryfolders app maps.
++		if !library_roots.iter().any(|root| root == &self.steam_root) {
++			library_roots.push(self.steam_root.clone());
++		}
++
++		let mut seen = HashSet::<AppID>::new();
++		let mut games = apps
+ 			.iter()
+ 			.filter_map(|app_entry| {
+ 				let manifest = match self.get_app_manifest(app_entry) {
+@@ -282,9 +366,42 @@ impl SteamUtils {
+ 					return None;
+ 				}
++				seen.insert(manifest.app_id.clone());
+ 				Some(manifest)
+ 			})
+-			.collect();
++			.collect::<Vec<_>>();
++
++		for path in steamapp_paths.into_iter() {
++			let manifest = match self.get_app_manifest_from_path(&path) {
++				Ok(manifest) => manifest,
++				Err(e) => {
++					log::warn!(
++						"Failed to parse app manifest {:?}: {}. This entry won't show.",
++						path, e
++					);
++					continue;
++				}
++			};
++			if seen.insert(manifest.app_id.clone()) {
++				games.push(manifest);
++			}
++		}
++
 +		let vr_cache_path = PathBuf::from(std::env::var("HOME")?)
 +			.join(".local/share/psvr2-setup/steam-vr-apps.json");
 +		if let Ok(raw) = std::fs::read_to_string(vr_cache_path)
@@ -88,10 +209,9 @@ index 56ce0bb..5fe5e01 100644
 +			raw_state_flags: 4,
 +			last_played: None,
 +		});
-+
+ 
  		match sort_method {
  			GameSortMethod::None => {}
- 			GameSortMethod::NameAsc => {
 diff --git a/wayvr/src/backend/openxr/helpers.rs b/wayvr/src/backend/openxr/helpers.rs
 index d2c475e..b727d6a 100644
 --- a/wayvr/src/backend/openxr/helpers.rs
