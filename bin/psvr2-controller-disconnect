@@ -1,0 +1,74 @@
+#!/usr/bin/bash
+set -u
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+
+bluetoothctl_bin=$(command -v bluetoothctl 2>/dev/null || true)
+[[ -n "$bluetoothctl_bin" ]] || { echo "PSVR2: bluetoothctl is unavailable; cannot disconnect controllers." >&2; exit 0; }
+
+is_connected() {
+    local address=$1 info
+    info=$("$bluetoothctl_bin" info "$address" 2>/dev/null) || return 1
+    grep -Fq "Connected: yes" <<<"$info"
+}
+
+disconnect_device() {
+    local address=$1 name=$2
+    [[ -n "$address" ]] || return 0
+    if ! is_connected "$address"; then
+        return 0
+    fi
+    if [[ -n "$name" ]]; then
+        echo "PSVR2: Disconnecting ${name} ($address)."
+    else
+        echo "PSVR2: Disconnecting Bluetooth controller $address."
+    fi
+    "$bluetoothctl_bin" disconnect "$address" >/dev/null 2>&1 || true
+}
+
+declare -A candidates=()
+ordered_candidates=()
+
+add_candidate() {
+    local address=$1
+    [[ -n "$address" ]] || return 0
+    if [[ -n "${candidates[$address]:-}" ]]; then
+        return 0
+    fi
+    candidates["$address"]=1
+    ordered_candidates+=("$address")
+}
+
+if [[ -n "${CONTROLLER_LEFT_MAC:-}" ]]; then
+    add_candidate "$CONTROLLER_LEFT_MAC"
+fi
+if [[ -n "${CONTROLLER_RIGHT_MAC:-}" ]]; then
+    add_candidate "$CONTROLLER_RIGHT_MAC"
+fi
+
+while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    address=$(awk '{print $2; exit}' <<<"$line")
+    name=$(awk '{$1=$2=""; sub(/^  /, "", $0); print $0}' <<<"$line")
+    if [[ -z "$address" ]]; then
+        continue
+    fi
+    if [[ "$name" == *"PSVR2"* ]] || [[ "$name" == *"PlayStation VR2"* ]] || [[ "$name" == *"Sense Controller"* ]] || [[ "$name" == *"VR2 Sense Controller"* ]]; then
+        add_candidate "$address"
+    fi
+done < <("$bluetoothctl_bin" devices 2>/dev/null)
+
+disconnected_any=0
+for address in "${ordered_candidates[@]}"; do
+    if is_connected "$address"; then
+        info=$("$bluetoothctl_bin" info "$address" 2>/dev/null || true)
+        name=$(grep -F "Name:" <<<"$info" | head -n 1 | sed 's/^Name:[[:space:]]*//')
+        disconnect_device "$address" "$name"
+        disconnected_any=1
+    fi
+done
+
+if (( disconnected_any == 0 )); then
+    echo "PSVR2: No connected Sense controllers discovered."
+fi
+
+exit 0

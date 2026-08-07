@@ -131,7 +131,7 @@ set -e
 if [[ "$calibration_changed" == true ]]; then
     notify-send 'PSVR2 play area saved' \
         'Reloading the VR origin and returning to WayVR.' 2>/dev/null || true
-    "$helper_dir/psvr2-fossvr-stop"
+    PSVR2_DISCONNECT_CONTROLLERS=0 "$helper_dir/psvr2-fossvr-stop"
     # The proprietary driver releases several PSVR2 USB interfaces
     # asynchronously.  Give them time to settle before reacquiring the HMD.
     sleep 6

@@ -163,7 +163,9 @@ controller pairing, read [docs/SETUP.md](docs/SETUP.md).
   dashboard while keeping Monado and the calibrated tracking origin alive.
 - Disconnect the headset's USB, DisplayPort, adapter power, or headset cable:
   the active VR title, WayVR, Monado, and Ignition helper close automatically,
-  and the previous desktop audio output is restored. Steam itself stays open.
+  and the previous desktop audio output is restored. The headset’s Bluetooth-linked
+  Sense controllers are also auto-disconnected so they do not remain paired to
+  VR while the session is down. Steam itself stays open.
 - Stop VR: launch **Stop PSVR2 (Monado)** from GNOME or run `psvr2-fossvr-stop`.
 - Manual start: launch **PSVR2 (Monado + WayVR)** or run `psvr2-fossvr-start`.
 

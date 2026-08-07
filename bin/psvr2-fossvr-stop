@@ -3,6 +3,7 @@ set -euo pipefail
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 runtime_preflight="$helper_dir/psvr2-runtime-preflight"
 audio_helper="$helper_dir/psvr2-audio"
+controller_disconnect="$helper_dir/psvr2-controller-disconnect"
 lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 exec 8>"$lock_dir/psvr2-fossvr-start.lock"
 flock 8
@@ -22,6 +23,9 @@ if [[ "$state" != inactive && "$state" != failed ]]; then
     systemctl --user kill --kill-whom=all --signal=SIGKILL psvr2-fossvr.service || true
 fi
 systemctl --user stop psvr2-fossvr.service || true
+if [[ "${PSVR2_DISCONNECT_CONTROLLERS:-1}" == "1" ]] && [[ -x "$controller_disconnect" ]]; then
+    "$controller_disconnect" || true
+fi
 [[ ! -x "$runtime_preflight" ]] || "$runtime_preflight" || true
 [[ ! -x "$audio_helper" ]] || "$audio_helper" restore || true
 echo "PSVR2 runtime stopped."
