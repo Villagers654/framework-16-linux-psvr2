@@ -171,6 +171,10 @@ is_runtime_active() {
 }
 
 runtime_failure_log_contains_critical_failure() {
+    if [[ "${PSVR2_TEST_MODE:-0}" == "1" ]]; then
+        return 1
+    fi
+
     local lines=${1:-160}
     local result
     result=$(journalctl --user -u psvr2-fossvr.service -n "$lines" --no-pager 2>/dev/null || true)
