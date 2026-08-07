@@ -191,14 +191,11 @@ psvr2-sync-steam-vr-games --discovery-only
 ```
 
 The sync now re-checks all installed entries that aren't already confirmed VR and
-rebuilds stale IDs, so missing titles can recover automatically. If a title is
-still missing after this pass, add it manually with a one-time override:
+rebuilds stale IDs, so missing titles can recover automatically. Running this
+while WayVR is active refreshes the dashboard state automatically, so titles
+should appear on the next startup of the menu.
 
 ```bash
-sed -i 's/^PSVR2_FORCE_VR_IDS=.*/PSVR2_FORCE_VR_IDS="1116540"/' ~/.config/psvr2-linux/settings.env
-systemctl --user restart psvr2-fossvr-wayvr.service
-```
-
 If a title still does not show in the Games tab, restart Monado/WayVR (`psvr2-fossvr-stop`
 then `psvr2-fossvr-start`) so WayVR reloads the cache once with a clean runtime.
 

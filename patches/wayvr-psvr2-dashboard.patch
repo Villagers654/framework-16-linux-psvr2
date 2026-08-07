@@ -1,5 +1,5 @@
 diff --git a/dash-frontend/src/frontend.rs b/dash-frontend/src/frontend.rs
-index a2f9c4d..a4b47d7 100644
+index a2f9c4d3..a4b47d78 100644
 --- a/dash-frontend/src/frontend.rs
 +++ b/dash-frontend/src/frontend.rs
 @@ -168,11 +168,9 @@ impl<T: 'static> Frontend<T> {
@@ -18,15 +18,18 @@ index a2f9c4d..a4b47d7 100644
  
  		let id_label_time = state.get_widget_id("label_time")?;
 diff --git a/dash-frontend/src/util/steam_utils.rs b/dash-frontend/src/util/steam_utils.rs
-index 56ce0bb..9ecd5d08 100644
+index 56ce0bb6..b1eec057 100644
 --- a/dash-frontend/src/util/steam_utils.rs
 +++ b/dash-frontend/src/util/steam_utils.rs
-@@ -1,5 +1,6 @@
+@@ -1,6 +1,7 @@
  use keyvalues_parser::{Obj, Vdf};
  use serde::{Deserialize, Serialize};
+-use std::path::PathBuf;
 +use std::collections::{HashMap, HashSet};
- use std::path::PathBuf;
-+use std::path::Path;
++use std::path::{Path, PathBuf};
+ 
+ #[derive(Clone)]
+ pub struct SteamUtils {
 @@ -24,6 +25,9 @@ fn get_steam_root() -> anyhow::Result<PathBuf> {
  
  pub type AppID = String;
@@ -37,10 +40,10 @@ index 56ce0bb..9ecd5d08 100644
  #[derive(Clone, Debug, Serialize, Deserialize)]
  pub struct AppManifest {
  	pub app_id: AppID,
-@@ -50,6 +54,37 @@ fn get_str_first<'a>(obj: &'a Obj<'_>, key: &str) -> Option<&'a str> {
+@@ -50,6 +54,85 @@ fn get_str_first<'a>(obj: &'a Obj<'_>, key: &str) -> Option<&'a str> {
  	obj.get(key)?.first()?.get_str()
  }
-+
+ 
 +fn get_library_folders(vdf_root: &Vdf<'_>) -> Vec<String> {
 +	let mut roots = Vec::<String>::new();
 +	let obj_libraryfolders = match vdf_root.value.get_obj() {
@@ -62,19 +65,68 @@ index 56ce0bb..9ecd5d08 100644
 +			Some(rest) => {
 +				let home = std::env::var("HOME").unwrap_or_default();
 +				format!("{}{}", home, rest)
-+			}
++			};
 +			None => path.to_string(),
 +		};
-+		roots.push(expanded.replace("\\", "/").replace('\\', "/"));
++		roots.push(expanded.replace("\\\\", "/").replace('\\', "/"));
 +		num += 1;
 +	}
 +
 +	roots
 +}
- 
++
++fn parse_manifest_field(raw: &str, key: &str) -> Option<String> {
++	let marker = format!("\"{}\"", key);
++	for line in raw.lines() {
++		let trimmed = line.trim_start();
++		let Some(key_start) = trimmed.find(&marker) else {
++			continue;
++		};
++		if key_start != 0 {
++			continue;
++		}
++
++		let rest = &trimmed[key_start + marker.len()..];
++		let Some(first_quote) = rest.find('"') else {
++			continue;
++		};
++		let value_start = first_quote + 1;
++		let value_and_rest = &rest[value_start..];
++		let Some(second_quote) = value_and_rest.find('"') else {
++			continue;
++		};
++
++		let mut value = value_and_rest[..second_quote].to_string();
++
++		value = value.trim().to_string();
++		if value.is_empty() {
++			continue;
++		}
++
++		return Some(value);
++	}
++
++	None
++}
++
++fn app_manifest_from_raw(app_id: AppID, raw: &str) -> Option<AppManifest> {
++	let name = parse_manifest_field(raw, "name").unwrap_or_else(|| format!("App {}", app_id));
++	let raw_state_flags = parse_manifest_field(raw, "StateFlags").and_then(|value| value.parse::<u64>().ok()).unwrap_or(0);
++	let last_played = parse_manifest_field(raw, "LastPlayed").and_then(|value| value.parse::<u64>().ok());
++
++	Some(AppManifest {
++		app_id: app_id.clone(),
++		run_game_id: app_id,
++		name,
++		raw_state_flags,
++		last_played,
++	})
++}
++
  fn vdf_parse_libraryfolders<'a>(vdf_root: &'a Vdf<'a>) -> Option<Vec<AppEntry>> {
  	let obj_libraryfolders = vdf_root.value.get_obj()?;
-@@ -127,7 +162,12 @@ struct AppEntry {
+ 
+@@ -127,7 +210,12 @@ struct AppEntry {
  
  pub fn launch(app_id: &AppID) -> anyhow::Result<()> {
  	log::info!("Launching Steam game with AppID {}", app_id);
@@ -87,7 +139,8 @@ index 56ce0bb..9ecd5d08 100644
 +	call_steam(&format!("steam://launch/{}/vr", app_id))?;
  	Ok(())
  }
-@@ -224,13 +264,9 @@ pub fn list_running_games() -> anyhow::Result<Vec<RunningGame>> {
+ 
+@@ -224,13 +312,9 @@ pub fn list_running_games() -> anyhow::Result<Vec<RunningGame>> {
  }
  
  fn call_steam(arg: &str) -> anyhow::Result<()> {
@@ -104,9 +157,25 @@ index 56ce0bb..9ecd5d08 100644
  }
  
  impl SteamUtils {
-@@ -258,6 +294,22 @@ impl SteamUtils {
- 		Ok(manifest)
- 	}
+@@ -249,13 +333,38 @@ impl SteamUtils {
+ 			PathBuf::from(&app_entry.root_path).join(format!("steamapps/appmanifest_{}.acf", app_entry.app_id));
+ 
+ 		let vdf_data = std::fs::read_to_string(manifest_path)?;
+-		let vdf_root = keyvalues_parser::Vdf::parse(&vdf_data)?;
++		let Ok(vdf_root) = keyvalues_parser::Vdf::parse(&vdf_data) else {
++			return app_manifest_from_raw(app_entry.app_id.clone(), &vdf_data)
++				.ok_or_else(|| anyhow::anyhow!("Failed to parse {} manifest", app_entry.app_id));
++		};
+ 
+-		let Some(manifest) = vdf_parse_appstate(app_entry.app_id.clone(), &vdf_root) else {
+-			anyhow::bail!("Failed to parse AppState");
++		vdf_parse_appstate(app_entry.app_id.clone(), &vdf_root)
++			.ok_or_else(|| anyhow::anyhow!("Failed to parse AppState"))
++			.or_else(|_| {
++				app_manifest_from_raw(app_entry.app_id.clone(), &vdf_data)
++					.ok_or_else(|| anyhow::anyhow!("Failed to parse AppState"))
++			})
++	}
 +
 +	fn get_app_manifest_from_path(&self, path: &Path) -> anyhow::Result<AppManifest> {
 +		let stem = path
@@ -116,19 +185,22 @@ index 56ce0bb..9ecd5d08 100644
 +			.ok_or_else(|| anyhow::anyhow!("Invalid appmanifest filename: {:?}", path))?;
 +		let app_id = stem.to_string();
 +		let vdf_data = std::fs::read_to_string(path)?;
-+		let vdf_root = keyvalues_parser::Vdf::parse(&vdf_data)?;
-+		let Some(manifest) = vdf_parse_appstate(app_id.clone(), &vdf_root) else {
-+			anyhow::bail!("Failed to parse AppState");
-+		};
-+
-+		Ok(manifest)
-+	}
++		let Ok(vdf_root) = keyvalues_parser::Vdf::parse(&vdf_data) else {
++			return app_manifest_from_raw(app_id.clone(), &vdf_data)
++				.ok_or_else(|| anyhow::anyhow!("Failed to parse {} manifest", app_id));
+ 		};
+ 
+-		Ok(manifest)
++		vdf_parse_appstate(app_id.clone(), &vdf_root)
++			.ok_or_else(|| anyhow::anyhow!("Failed to parse AppState"))
++			.or_else(|_| {
++				app_manifest_from_raw(app_id.clone(), &vdf_data)
++					.ok_or_else(|| anyhow::anyhow!("Failed to parse AppState"))
++			})
+ 	}
  
  	pub fn list_installed_games(&self, sort_method: GameSortMethod) -> anyhow::Result<Vec<AppManifest>> {
- 		let path = self.get_dir_steamapps().join("libraryfolders.vdf");
- 		let vdf_data = std::fs::read_to_string(path)?;
-@@ -268,7 +320,39 @@ impl SteamUtils {
- 		let Some(apps) = vdf_parse_libraryfolders(&vdf_root) else {
+@@ -268,7 +377,39 @@ impl SteamUtils {
  			anyhow::bail!("Failed to fetch installed Steam apps");
  		};
  
@@ -169,9 +241,10 @@ index 56ce0bb..9ecd5d08 100644
  			.iter()
  			.filter_map(|app_entry| {
  				let manifest = match self.get_app_manifest(app_entry) {
-@@ -282,9 +366,42 @@ impl SteamUtils {
- 					return None;
- 				}
+@@ -282,9 +423,42 @@ impl SteamUtils {
+ 						return None;
+ 					}
+ 				};
 +				seen.insert(manifest.app_id.clone());
  				Some(manifest)
  			})
@@ -212,8 +285,25 @@ index 56ce0bb..9ecd5d08 100644
  
  		match sort_method {
  			GameSortMethod::None => {}
+diff --git a/dash-frontend/src/views/game_list.rs b/dash-frontend/src/views/game_list.rs
+index 1097f5f2..2b9a7dd9 100644
+--- a/dash-frontend/src/views/game_list.rs
++++ b/dash-frontend/src/views/game_list.rs
+@@ -183,6 +183,12 @@ impl View {
+ 			.list_installed_games(steam_utils::GameSortMethod::PlayDateDesc)
+ 		{
+ 			Ok(manifests) => {
++				let names: Vec<_> = manifests.iter().map(|manifest| &manifest.name).collect();
++				log::info!(
++					"PSVR2 WayVR game listing loaded with {} apps: {}",
++					manifests.len(),
++					names.join(", ")
++				);
+ 				self.page_count = (manifests.len() as u32 + MAX_GAMES_PER_PAGE) / MAX_GAMES_PER_PAGE;
+ 				self.all_manifests = manifests;
+ 				self.tasks.push(Task::FillPage(0));
 diff --git a/wayvr/src/backend/openxr/helpers.rs b/wayvr/src/backend/openxr/helpers.rs
-index d2c475e..b727d6a 100644
+index d2c475eb..b727d6aa 100644
 --- a/wayvr/src/backend/openxr/helpers.rs
 +++ b/wayvr/src/backend/openxr/helpers.rs
 @@ -77,12 +77,18 @@ pub(super) fn init_xr() -> Result<(xr::Instance, xr::SystemId), anyhow::Error> {
@@ -238,10 +328,10 @@ index d2c475e..b727d6a 100644
          enabled_extensions.other.push(xr_extension);
      }
 diff --git a/wayvr/src/backend/openxr/mod.rs b/wayvr/src/backend/openxr/mod.rs
-index af703abc..2cf69bee 100644
+index af703abc..f188762f 100644
 --- a/wayvr/src/backend/openxr/mod.rs
 +++ b/wayvr/src/backend/openxr/mod.rs
-@@ -41,6 +41,39 @@ mod skybox;
+@@ -41,6 +41,40 @@ mod skybox;
  mod swapchain;
  
  const VIEW_TYPE: xr::ViewConfigurationType = xr::ViewConfigurationType::PRIMARY_STEREO;
@@ -269,9 +359,10 @@ index af703abc..2cf69bee 100644
 +            self.ps_pressed_at = None;
 +            true
 +        } else {
-+            if self.ps_pressed_at.is_some_and(|pressed| {
-+                now.duration_since(pressed) > SCREENSHOT_CHORD_WINDOW
-+            }) {
++            if self
++                .ps_pressed_at
++                .is_some_and(|pressed| now.duration_since(pressed) > SCREENSHOT_CHORD_WINDOW)
++            {
 +                self.ps_pressed_at = None;
 +            }
 +            false
@@ -281,7 +372,7 @@ index af703abc..2cf69bee 100644
  
  struct XrState {
      instance: xr::Instance,
-@@ -150,6 +183,7 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+@@ -150,6 +184,7 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
      let mut main_session_visible = false;
      let mut environment_blend_mode = modes[0];
      let mut last_frame_time = Instant::now();
@@ -289,7 +380,7 @@ index af703abc..2cf69bee 100644
  
      'main_loop: loop {
          let now = Instant::now();
-@@ -275,7 +309,21 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+@@ -275,7 +310,21 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
              blocker.update(&mut app);
          }
  
@@ -312,17 +403,25 @@ index af703abc..2cf69bee 100644
              .input_state
              .pointers
              .iter()
-@@ -284,7 +332,8 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+@@ -284,11 +333,12 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
              overlays.show_hide(&mut app);
          }
  
 -        if app
+-            .input_state
+-            .pointers
+-            .iter()
+-            .any(|p| p.now.toggle_dashboard && !p.before.toggle_dashboard)
 +        if !screenshot_chord_started
 +            && app
-             .input_state
-             .pointers
-             .iter()
-@@ -534,6 +583,44 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
++                .input_state
++                .pointers
++                .iter()
++                .any(|p| p.now.toggle_dashboard && !p.before.toggle_dashboard)
+         {
+             app.tasks
+                 .enqueue(TaskType::Overlay(OverlayTask::ToggleDashboard));
+@@ -534,6 +584,44 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
      Ok(())
  }
  
@@ -368,7 +467,7 @@ index af703abc..2cf69bee 100644
      Quad(xr::CompositionLayerQuad<'a, xr::Vulkan>),
      Cylinder(xr::CompositionLayerCylinderKHR<'a, xr::Vulkan>),
 diff --git a/wlx-common/assets/openxr_actions.json5 b/wlx-common/assets/openxr_actions.json5
-index 155cfb8..aa871c7 100644
+index 155cfb88..aa871c7d 100644
 --- a/wlx-common/assets/openxr_actions.json5
 +++ b/wlx-common/assets/openxr_actions.json5
 @@ -129,6 +129,49 @@
