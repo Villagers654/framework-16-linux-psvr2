@@ -64,11 +64,13 @@ if [[ "$tracking_ready" != true ]]; then
     exit 1
 fi
 
-export XRIZER_FORCE_HEADSET_ON_HEAD=1
+roomsetup_env=()
+roomsetup_env+=("XRIZER_FORCE_HEADSET_ON_HEAD=1")
 # The Toolkit camera feed is published in the PSVR2 driver's raw tracking
-# universe.  Scope raw-space emulation to Room Setup; games keep STAGE space.
-export XRIZER_FORCE_RAW_TRACKING_SPACE=1
-export XRIZER_RAW_CHAPERONE_PATH="$STEAM_ROOT/config/playstation_vr2/chaperone_info.vrchap"
+# universe.  Scope raw-space emulation to this Room Setup launch only; games
+# keep STAGE space.
+roomsetup_env+=("XRIZER_FORCE_RAW_TRACKING_SPACE=1")
+roomsetup_env+=("XRIZER_RAW_CHAPERONE_PATH=$STEAM_ROOT/config/playstation_vr2/chaperone_info.vrchap")
 
 # Both the SteamVR-driver bridge and xrizer capture the standing/raw transform
 # when their processes start.  Room Setup changes that transform when a wizard
@@ -90,8 +92,8 @@ valid_play_area() {
         && ! grep -Eq '"play_area"[[:space:]]*:[[:space:]]*\[[[:space:]]*0([.]0+)?[[:space:]]*,[[:space:]]*0([.]0+)?[[:space:]]*\]' "$chaperone"
 }
 
-initial_digest=$(chaperone_digest)
-"$helper_dir/psvr2-fossvr-run" \
+env "${roomsetup_env[@]}" \
+    "$helper_dir/psvr2-fossvr-run" \
     "$PSVR2_SETUP_ROOT/unity-setup/PSVR2Toolkit.UnitySetup.x86_64" &
 runner_pid=$!
 calibration_changed=false

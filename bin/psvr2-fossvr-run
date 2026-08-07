@@ -3,6 +3,9 @@ set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
 [[ $# -gt 0 ]] || { echo "Usage: psvr2-fossvr-run PROGRAM [ARG ...]" >&2; exit 2; }
 
+# Never inherit optional one-off room-setup debug environment into normal games.
+unset XRIZER_FORCE_RAW_TRACKING_SPACE XRIZER_RAW_CHAPERONE_PATH XRIZER_FORCE_HEADSET_ON_HEAD || true
+
 start_helper="${PSVR2_HELPER_DIR:-$HOME/.local/bin}/psvr2-fossvr-start"
 [[ -x "$start_helper" ]] || { echo "Required PSVR2 helper is missing or not executable: $start_helper" >&2; exit 1; }
 

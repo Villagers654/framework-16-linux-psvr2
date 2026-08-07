@@ -21,7 +21,10 @@ if [[ ! -d "$root/xrizer/.git" ]]; then
 fi
 git -C "$root/xrizer" fetch origin
 git -C "$root/xrizer" checkout 6c3e45f4c18b014a7aba87282ee0677306315052
-for patch in "$repo/patches/xrizer-linux-room-setup.patch" "$repo/patches/xrizer-room-setup-proximity.patch"; do
+for patch in \
+  "$repo/patches/xrizer-linux-room-setup.patch" \
+  "$repo/patches/xrizer-linux-room-setup-tracking-guard.patch" \
+  "$repo/patches/xrizer-room-setup-proximity.patch"; do
   git -C "$root/xrizer" apply --check "$patch" 2>/dev/null && git -C "$root/xrizer" apply "$patch" || true
 done
 
