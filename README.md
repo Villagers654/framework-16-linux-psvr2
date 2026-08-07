@@ -120,7 +120,8 @@ Then:
 2. Select **PSVR2 Toolkit – 120 Hz / 1.7x**.
 3. Choose **Clean Build** once.
 4. Run `./scripts/verify.sh`.
-5. Reboot if you installed optional kernel arguments.
+5. Run `./scripts/verify-haptics.sh` for a controller-feedback validation pass.
+6. Reboot if you installed optional kernel arguments.
 
 The installer never overwrites an existing settings file. Review it here:
 

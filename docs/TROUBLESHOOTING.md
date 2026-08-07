@@ -118,3 +118,29 @@ back to an unrelated desktop window. Check `wmctrl -lGpx`, run
 the user journal under the `psvr2-screenshot` tag and saved under
 `~/Pictures/VR Screenshots/`. Native Wayland games without a mirror need their
 own screenshot feature.
+
+## Controller haptics not firing in game
+
+This setup keeps Sense haptic support active in both Monado and XRizer:
+
+- Monado maps Sense controllers to an OpenVR haptic output handle in
+  `patches/monado-psvr2-sense.patch`.
+- XRizer exposes haptic action targets (`/user/hand/.../output/haptic`) in the
+  PSVR2-compatible bindings profile.
+
+Run:
+
+```bash
+./scripts/verify-haptics.sh
+```
+
+If this script passes but a game is still silent, do a manual in-headset check:
+
+1. Exit any menu and start a title with known force-feedback events:
+   Superhot, Beat Saber, or Keep Talking and Nobody Explodes.
+2. Trigger expected vibration moments (ammo impact, recoil, menu scroll/select).
+3. If you only feel feedback in some titles, that game's Linux VR path is likely
+   reducing or remapping vibration output.
+
+For per-title issues, keep the same runtime and controller mapping; retune
+game-specific settings instead.

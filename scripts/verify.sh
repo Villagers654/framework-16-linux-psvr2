@@ -20,6 +20,7 @@ check test -f "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/re
 check grep -aFq 'Raw tracking space removes PSVR2 chaperone' "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/release/libxrizer.so"
 check grep -Fq 'XRIZER_FORCE_RAW_TRACKING_SPACE=1' "$HOME/.local/bin/psvr2-room-setup"
 check grep -Fq 'PSVR2 play area saved' "$HOME/.local/bin/psvr2-room-setup"
+check bash -c 'bash "$1"' _ "$repo/scripts/verify-haptics.sh"
 check bash -c 'getcap "$1" | grep -Fq "cap_sys_nice=eip"' _ \
     "$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
 check grep -Fq 'U_PACING_COMP_MIN_TIME_MS' "$HOME/.local/bin/psvr2-monado-service"
