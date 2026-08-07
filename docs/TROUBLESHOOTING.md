@@ -36,6 +36,24 @@ Hard runtime failures are also counted persistently at
 `$XDG_RUNTIME_DIR/psvr2-startup-failure-state` so each automatic restart uses
 the same recovery backoff instead of immediately re-entering a tight start loop.
 
+If startup still loops and logs:
+
+- `No builder selected in config (or wasn't compiled in)`  
+- `Selected psvr2 because it was certain it could create a head` followed by
+  `XRT_ERROR_DEVICE_CREATION_FAILED`
+
+that means the installed Monado binary was built without PlayStation VR2 support
+enabled. Rebuild with `XRT_BUILD_DRIVER_PSVR2=ON` and restart:
+
+```bash
+./scripts/prepare-envision-runtime.sh
+cd ~/.local/share/envision/psvr2-toolkit-monado/xrservice
+cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado \
+  -DXRT_BUILD_DRIVER_PSVR2=ON -DXRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE=ON -DXRT_BUILD_DRIVER_PSSENSE=OFF
+cmake --build build -j4 && cmake --install build
+systemctl --user restart psvr2-autostart-monitor.service
+```
+
 - `PSVR2_LINK_DISCONNECT_CHECKS` (default `2`) controls how many consecutive
   negative link samples are required before a disconnect is considered real.
 - `PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS` (default `90`) pauses startup after
@@ -65,6 +83,19 @@ If a restart loop still appears, capture the last 200 monitor and Monado lines:
 journalctl --user -u psvr2-autostart-monitor.service -n 300 --no-pager
 journalctl --user -u psvr2-fossvr.service -n 300 --no-pager
 ```
+
+## Automated plug/unplug regression test (non-invasive)
+
+Before deploying startup changes, run the repo-local reconnect test to prove the
+monitor handles repeated transitions without entering a retry loop:
+
+```bash
+./scripts/verify-reconnect-cycle.sh 5
+```
+
+The script runs a synthetic, deterministic 5-cycle headset connect/disconnect
+scenario with stubbed helper calls and validates startup/stop counts on each
+edge. It is fully local and does not require the headset to be attached.
 
 ## VR processes remain after physically disconnecting PSVR2
 

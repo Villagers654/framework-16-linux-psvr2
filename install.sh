@@ -33,7 +33,9 @@ if [[ "$mode" == user ]]; then
         "$HOME/.config/psvr2-linux" "$HOME/.config/systemd/user" \
         "$HOME/.config/wireplumber/wireplumber.conf.d" \
         "$HOME/.local/share/applications" "$HOME/.local/share/psvr2-setup"
-    install -m 0755 "$repo_dir"/bin/* "$HOME/.local/bin/"
+    while IFS= read -r -d '' script; do
+        install -m 0755 "$script" "$HOME/.local/bin/"
+    done < <(find "$repo_dir/bin" -maxdepth 1 -type f -print0)
     install -m 0644 "$repo_dir/lib/psvr2-common.sh" "$HOME/.local/lib/psvr2-linux/common.sh"
     install -m 0644 "$repo_dir"/systemd/user/* "$HOME/.config/systemd/user/"
 

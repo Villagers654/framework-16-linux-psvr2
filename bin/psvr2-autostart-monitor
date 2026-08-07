@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 set -u
 
+usb_root=${PSVR2_USB_ROOT:-/sys/bus/usb/devices}
 drm_root=${PSVR2_DRM_ROOT:-/sys/class/drm}
 link_stability_checks=${PSVR2_LINK_STABILITY_CHECKS:-4}
 link_disconnect_checks=${PSVR2_LINK_DISCONNECT_CHECKS:-2}
@@ -17,6 +18,8 @@ required_usb_interfaces=${PSVR2_USB_INTERFACE_MINIMUM:-11}
 suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 cooldown_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-startup-cooldown"
 runtime_failure_state_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-startup-failure-state"
+runtime_test_state_file="${PSVR2_TEST_RUNTIME_STATE_FILE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-runtime-active-test}"
+connection_state_file="${PSVR2_CONNECTION_STATE_FILE:-}"
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 start_helper="$helper_dir/psvr2-fossvr-start"
 stop_helper="$helper_dir/psvr2-fossvr-stop"
@@ -56,13 +59,21 @@ for helper in "$start_helper" "$stop_helper" "$controller_helper"; do
 done
 
 headset_connected() {
+    if [[ -n "$connection_state_file" && -r "$connection_state_file" ]]; then
+        case "$(tr -d '[:space:]' < "$connection_state_file")" in
+            connected) return 0 ;;
+            disconnected) return 1 ;;
+            *) return 1 ;;
+        esac
+    fi
+
     # The adapter exposes a 12 Mbps USB control function even when the HMD is
     # powered off. Starting Sony's driver in that state makes it address the
     # unavailable camera interfaces and can wedge the AMD xHCI controller.
     # Require the separate 5 Gbps PSVR2 function before declaring it ready.
     local usb_device speed usb_interface_count
     local superspeed_ready=0
-    for usb_device in /sys/bus/usb/devices/*; do
+    for usb_device in "$usb_root"/*; do
         [[ -r "$usb_device/idVendor" && -r "$usb_device/idProduct" && -r "$usb_device/speed" ]] || continue
         [[ "$(<"$usb_device/idVendor"):$(<"$usb_device/idProduct")" == 054c:0cde ]] || continue
         speed=$(cat "$usb_device/speed")
@@ -150,6 +161,10 @@ controller_count() {
 }
 
 is_runtime_active() {
+    if [[ "${PSVR2_TEST_MODE:-0}" == "1" && -r "$runtime_test_state_file" ]]; then
+        [[ "$(cat "$runtime_test_state_file")" == active ]]
+        return
+    fi
     local state
     state=$(systemctl --user show psvr2-fossvr.service -p ActiveState --value 2>/dev/null || echo inactive)
     [[ "$state" == active || "$state" == activating ]]
@@ -163,6 +178,12 @@ runtime_failure_log_contains_critical_failure() {
     grep -Fq "XRT_ERROR_DEVICE_CREATION_FAILED" <<<"$result" && return 0
     grep -Fq "Unable to create devices" <<<"$result" && return 0
     grep -Fq "Monado failed to start" <<<"$result" && return 0
+    grep -Fq "Selected lighthouse because it was certain it could create a head" <<<"$result" && return 0
+    if grep -Fq "No builder selected in config (or wasn't compiled in)" <<<"$result" && \
+        grep -Fq "Selected lighthouse because it was certain it could create a head" <<<"$result"; then
+        return 0
+    fi
+    grep -Fq "Unable to find HMD" <<<"$result" && return 0
     return 1
 }
 
@@ -170,6 +191,9 @@ full_recovery_cycle() {
     echo "PSVR2 startup retries repeatedly hit a hard runtime failure; performing full recovery"
     systemctl --user stop psvr2-fossvr-wayvr.service psvr2-fossvr.service 2>/dev/null || true
     PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
+    if [[ "${PSVR2_TEST_MODE:-0}" == "1" ]]; then
+        printf '%s\n' inactive > "$runtime_test_state_file"
+    fi
     [[ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc" ]] && rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc"
     systemctl --user stop monado.service monado.socket 2>/dev/null || true
     sleep 3
@@ -203,6 +227,9 @@ start_runtime() {
         fi
 
         if "$start_helper"; then
+            if [[ "${PSVR2_TEST_MODE:-0}" == "1" ]]; then
+                printf '%s\n' active > "$runtime_test_state_file"
+            fi
             next_retry=0
             clear_runtime_cooldown
             clear_runtime_failure_state
@@ -219,12 +246,18 @@ start_runtime() {
                 return 1
             fi
             set_runtime_cooldown "$runtime_retry_cooldown"
+            if [[ "${PSVR2_TEST_MODE:-0}" == "1" ]]; then
+                printf '%s\n' inactive > "$runtime_test_state_file"
+            fi
             PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
             return 1
         else
             clear_runtime_failure_state
         fi
 
+        if [[ "${PSVR2_TEST_MODE:-0}" == "1" ]]; then
+            printf '%s\n' inactive > "$runtime_test_state_file"
+        fi
         PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
 
         if (( attempt < startup_retry_attempts )); then
@@ -278,6 +311,9 @@ while true; do
             if headset_state_stable 0 "$((link_disconnect_checks * link_check_interval))" "$link_disconnect_checks"; then
                 echo "PSVR2 USB or DisplayPort disconnected; stopping VR runtime"
                 if is_runtime_active; then
+                    if [[ "${PSVR2_TEST_MODE:-0}" == "1" ]]; then
+                        printf '%s\n' inactive > "$runtime_test_state_file"
+                    fi
                     PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
                 fi
                 rm -f "$suppress_file"
