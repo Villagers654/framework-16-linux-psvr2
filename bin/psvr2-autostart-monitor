@@ -349,6 +349,13 @@ while true; do
                 last_controller_repair=$now
                 controllers=$(controller_count)
             fi
+        elif (( controllers == 0 )) && is_runtime_active; then
+            if (( now - last_controller_repair >= controller_repair_backoff )); then
+                echo "PSVR2 sees no controllers in runtime; attempting reconnect"
+                "$controller_helper" || true
+                last_controller_repair=$now
+                controllers=$(controller_count)
+            fi
         fi
         previous_controllers=$controllers
         if ! is_runtime_active \
