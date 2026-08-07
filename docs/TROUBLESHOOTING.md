@@ -32,6 +32,9 @@ systemctl --user restart psvr2-fossvr-wayvr.service
 The autostart monitor now protects against short USB/DP flaps and repeated
 hard-runtime failures by requiring sustained link-state transitions before it
 stops/starts services and by enforcing a cooldown window after repeated failures.
+Hard runtime failures are also counted persistently at
+`$XDG_RUNTIME_DIR/psvr2-startup-failure-state` so each automatic restart uses
+the same recovery backoff instead of immediately re-entering a tight start loop.
 
 - `PSVR2_LINK_DISCONNECT_CHECKS` (default `2`) controls how many consecutive
   negative link samples are required before a disconnect is considered real.
@@ -45,6 +48,15 @@ reseed the loop with a clean retry:
 psvr2-fossvr-stop
 rm -f "$XDG_RUNTIME_DIR/psvr2-startup-cooldown"
 psvr2-fossvr-start
+```
+
+If you have to clear persisted state for immediate diagnostics (for example, after
+testing a firmware or game change), remove both anti-loop files and restart the
+monitor:
+
+```bash
+rm -f "$XDG_RUNTIME_DIR/psvr2-startup-cooldown" "$XDG_RUNTIME_DIR/psvr2-startup-failure-state"
+systemctl --user restart psvr2-autostart-monitor.service
 ```
 
 If a restart loop still appears, capture the last 200 monitor and Monado lines:
