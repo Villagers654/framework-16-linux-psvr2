@@ -36,15 +36,14 @@ assert_monado_binary_has_psvr2_builder() {
         return 1
     fi
     if command -v objdump >/dev/null 2>&1; then
-        found_builder=$(objdump -t "$monado_binary" 2>/dev/null | awk '/t_builder_psvr2_create/ {print 1; exit}')
-        if [[ "$found_builder" != "1" ]]; then
-            echo "Monado was built without the PSVR2 driver (XRT_BUILD_DRIVER_PSVR2 is OFF)." >&2
-            echo "Re-run ./scripts/prepare-envision-runtime.sh and perform a Clean Build in Envision." >&2
-            return 1
+        if (set +o pipefail; objdump -t "$monado_binary" 2>/dev/null | grep -q "t_builder_psvr2_create"); then
+            found_builder=1
         fi
-        return 0
+    else
+        if (set +o pipefail; strings "$monado_binary" 2>/dev/null | grep -q "t_builder_psvr2_create"); then
+            found_builder=1
+        fi
     fi
-    found_builder=$(strings "$monado_binary" | awk '/t_builder_psvr2_create/ {print 1; exit}')
     if [[ "$found_builder" != "1" ]]; then
         echo "Monado was built without the PSVR2 driver (XRT_BUILD_DRIVER_PSVR2 is OFF)." >&2
         echo "Re-run ./scripts/prepare-envision-runtime.sh and perform a Clean Build in Envision." >&2
