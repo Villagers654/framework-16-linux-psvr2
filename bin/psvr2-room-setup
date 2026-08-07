@@ -22,6 +22,7 @@ for state_dir in \
 done
 
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
+"$helper_dir/psvr2-chaperone-sanity"
 "$helper_dir/psvr2-fossvr-start"
 
 # The live camera mesh is created from the HMD pose captured when Unity starts.
@@ -132,6 +133,7 @@ if [[ "$calibration_changed" == true ]]; then
     notify-send 'PSVR2 play area saved' \
         'Reloading the VR origin and returning to WayVR.' 2>/dev/null || true
     PSVR2_DISCONNECT_CONTROLLERS=0 "$helper_dir/psvr2-fossvr-stop"
+    "$helper_dir/psvr2-chaperone-sanity"
     # The proprietary driver releases several PSVR2 USB interfaces
     # asynchronously.  Give them time to settle before reacquiring the HMD.
     sleep 6

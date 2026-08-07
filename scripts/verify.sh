@@ -9,6 +9,7 @@ failed=0
 check() { if "$@"; then printf 'OK   %s\n' "$*"; else printf 'FAIL %s\n' "$*"; failed=1; fi; }
 check test -x "$HOME/.local/bin/psvr2-fossvr-start"
 check test -x "$HOME/.local/bin/psvr2-controller-disconnect"
+check test -x "$HOME/.local/bin/psvr2-chaperone-sanity"
 check test -x "$HOME/.local/bin/psvr2-screenshot"
 check test -x "$HOME/.local/bin/psvr2-chaperone"
 check bash -c 'test "$(PSVR2_SCREENSHOT_WINDOW_LIST="$1" "$HOME/.local/bin/psvr2-screenshot" --print-window)" = 0x1' _ \

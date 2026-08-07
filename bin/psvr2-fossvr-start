@@ -5,8 +5,9 @@ source "$HOME/.local/lib/psvr2-linux/common.sh"
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 runtime_preflight="$helper_dir/psvr2-runtime-preflight"
 controller_preflight="$helper_dir/psvr2-controller-preflight"
+chaperone_sanity="$helper_dir/psvr2-chaperone-sanity"
 audio_helper="$helper_dir/psvr2-audio"
-for helper in "$runtime_preflight" "$controller_preflight" "$audio_helper"; do
+for helper in "$runtime_preflight" "$controller_preflight" "$chaperone_sanity" "$audio_helper"; do
     if [[ ! -x "$helper" ]]; then
         echo "Required PSVR2 helper is missing or not executable: $helper" >&2
         exit 1
@@ -81,6 +82,8 @@ if [[ "${PSVR2_ENABLE_STEAMVR_BRIDGE:-0}" == "1" ]]; then
     pkill -TERM -f '/SteamVR/bin/linux64/vrserver' 2>/dev/null || true
 fi
 
+"$chaperone_sanity" || true
+
 systemctl --user stop monado.socket monado.service 2>/dev/null || true
 "$runtime_preflight"
 if systemctl --user is-active --quiet psvr2-fossvr.service; then
@@ -132,6 +135,53 @@ is_monado_failed() {
     grep -Eq "XRT_ERROR_DEVICE_CREATION_FAILED|No builder selected in config|Unable to find HMD|PSVR2 HMD device creation failed|Could not allocate" <<<"$logs"
 }
 
+extract_controller_role() {
+    local device_side=$1 logs=$2 line value
+    line=$(grep -m 1 -E "^[[:space:]]*${device_side}:" <<<"$logs" | tail -n 1 || true)
+    if [[ -z "$line" ]]; then
+        return 1
+    fi
+    value=$(sed -E "s/^[[:space:]]*${device_side}:[[:space:]]*//; s/[[:space:]]+$//" <<<"$line")
+    value=${value// /}
+    if [[ -z "$value" || "$value" == "<none>" || "$value" == "<none/>" || "$value" == "none" ]]; then
+        return 1
+    fi
+    if [[ "$value" == "-1" ]]; then
+        return 1
+    fi
+    printf '%s\n' "$value"
+    return 0
+}
+
+await_controller_roles() {
+    local pid=$1 attempt=0 ready=0 left_role right_role role_logs
+    for _ in $(seq 1 40); do
+        if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
+            return 1
+        fi
+
+        role_logs=$(journalctl --user -u psvr2-fossvr.service "_PID=$pid" -o cat --no-pager 2>/dev/null || true)
+        left_role=$(extract_controller_role left "$role_logs" || true)
+        right_role=$(extract_controller_role right "$role_logs" || true)
+
+        if [[ -n "$left_role" && -n "$right_role" ]]; then
+            ready=1
+            break
+        fi
+
+        if (( attempt % 5 == 0 )); then
+            "$controller_preflight" || true
+        fi
+        attempt=$((attempt + 1))
+        sleep 0.5
+    done
+
+    if (( ready == 1 )); then
+        return 0
+    fi
+    return 1
+}
+
 # A live IPC socket only proves monado-service started. The proprietary
 # PSVR2 driver can remain alive after USB initialization fails, leaving a
 # headless runtime that systemd incorrectly reports as healthy. Do not probe
@@ -160,6 +210,16 @@ if (( ! runtime_healthy )); then
     journalctl --user -u psvr2-fossvr.service -n 80 --no-pager >&2
     systemctl --user stop psvr2-fossvr.service || true
     exit 1
+fi
+
+if ! await_controller_roles "$service_pid"; then
+    echo "Monado started but controller roles were not assigned; attempting one final reconnect and retry" >&2
+    "$controller_preflight" || true
+    sleep 2
+    if ! await_controller_roles "$service_pid"; then
+        systemctl --user stop psvr2-fossvr.service || true
+        exit 1
+    fi
 fi
 
 systemctl --user start psvr2-fossvr-wayvr.service

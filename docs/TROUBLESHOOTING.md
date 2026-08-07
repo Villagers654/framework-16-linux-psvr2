@@ -166,6 +166,11 @@ Room Setup; normal applications keep calibrated STAGE coordinates. Re-run
 `./install.sh --user` if the symptom returns after replacing the runtime.
 Do not delete the calibrated play area or patch Unity's `GameAssembly.so`.
 
+This setup also runs `psvr2-chaperone-sanity` at startup and after a room-setup
+save. If a `standing.translation` entry is clearly invalid (for example a very
+high Y offset), it is clamped back to a safe range with a timestamped backup
+so the next boot does not place the HMD far above or below the floor.
+
 ## Error 102: vrclient shared library not found
 
 Do not launch OpenVR games outside the wrapper. The per-game launch option must
