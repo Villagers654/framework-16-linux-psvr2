@@ -26,6 +26,8 @@ stop_helper="$helper_dir/psvr2-fossvr-stop"
 controller_helper="$helper_dir/psvr2-controller-preflight"
 next_retry=0
 runtime_failure_streak=0
+last_controller_repair=0
+controller_repair_backoff=5
 
 load_runtime_failure_state() {
     if [[ -r "$runtime_failure_state_file" ]]; then
@@ -334,11 +336,19 @@ while true; do
         fi
     elif [[ "$current" == connected ]]; then
         controllers=$(controller_count)
+        now=$(date +%s)
         if (( controllers > previous_controllers )) && is_runtime_active; then
             sleep 2
             "$controller_helper" || true
             echo "PSVR2 controllers hot-connected; keeping the active runtime"
             controllers=$(controller_count)
+        elif (( controllers < previous_controllers )) && is_runtime_active; then
+            if (( now - last_controller_repair >= controller_repair_backoff )); then
+                echo "PSVR2 detected fewer controllers than before; attempting reconnect"
+                "$controller_helper" || true
+                last_controller_repair=$now
+                controllers=$(controller_count)
+            fi
         fi
         previous_controllers=$controllers
         if ! is_runtime_active \

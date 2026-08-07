@@ -5,6 +5,19 @@ source "$HOME/.local/lib/psvr2-linux/common.sh"
 bluetoothctl_bin=$(command -v bluetoothctl 2>/dev/null || true)
 [[ -n "$bluetoothctl_bin" ]] || exit 0
 
+wait_for_hid() {
+    local product=$1
+    local tries=${2:-12}
+    local t
+    for ((t = 0; t < tries; t++)); do
+        if hid_present "$product"; then
+            return 0
+        fi
+        sleep 0.5
+    done
+    return 1
+}
+
 hid_present() {
     local product=$1 file
     for file in /sys/class/hidraw/hidraw*/device/uevent; do
@@ -18,12 +31,61 @@ repair() {
     local address=$1 product=$2 info
     [[ -n "$address" ]] || return 0
     info=$($bluetoothctl_bin info "$address" 2>/dev/null) || return 0
-    grep -Fq 'Connected: yes' <<<"$info" || return 0
-    hid_present "$product" && return 0
+    if ! grep -Fq 'Connected: yes' <<<"$info"; then
+        $bluetoothctl_bin connect "$address" >/dev/null 2>&1 || true
+        wait_for_hid "$product" 30 || true
+        info=$($bluetoothctl_bin info "$address" 2>/dev/null) || return 0
+        if ! grep -Fq 'Connected: yes' <<<"$info"; then
+            return 1
+        fi
+        return 0
+    fi
+
+    # If Bluetooth says it's connected but HID is missing, reconnect once to reset
+    # the BLE path after disconnect/stop cycles.
+    if hid_present "$product"; then
+        return 0
+    fi
+
     $bluetoothctl_bin disconnect "$address" >/dev/null 2>&1 || true
     sleep 1
     $bluetoothctl_bin connect "$address" >/dev/null 2>&1 || true
+    wait_for_hid "$product" 40 || return 1
+}
+
+repair_named_candidates() {
+    local product=$1
+    local target_name=$2
+    local address name
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        address=$(awk '{print $2; exit}' <<<"$line")
+        name=$(awk '{$1=$2=""; sub(/^  /, "", $0); print $0}' <<<"$line")
+        [[ -z "$address" ]] && continue
+        if [[ "$name" == *"$target_name"* ]]; then
+            repair "$address" "$product"
+            return 0
+        fi
+    done < <("$bluetoothctl_bin" devices 2>/dev/null)
+    return 1
 }
 
 repair "$CONTROLLER_LEFT_MAC" 0E45
+if [[ -n "${CONTROLLER_LEFT_MAC:-}" ]]; then
+    true
+else
+    repair_named_candidates 0E45 "PlayStation VR2 Sense Controller (L)"
+    repair_named_candidates 0E45 "PS VR2 Sense Controller (L)"
+    repair_named_candidates 0E45 "Sense Controller (L)"
+    repair_named_candidates 0E45 "PlayStation VR2 Sense Controller"
+fi
+
 repair "$CONTROLLER_RIGHT_MAC" 0E46
+if [[ -n "${CONTROLLER_RIGHT_MAC:-}" ]]; then
+    true
+else
+    repair_named_candidates 0E46 "PlayStation VR2 Sense Controller (R)"
+    repair_named_candidates 0E46 "PS VR2 Sense Controller (R)"
+    repair_named_candidates 0E46 "Sense Controller (R)"
+    repair_named_candidates 0E46 "PlayStation VR2 Sense Controller"
+fi
