@@ -13,6 +13,18 @@ Confirm both controller HID devices exist with `psvr2-controller-preflight`.
 If BlueZ says connected but no HID device exists, fill the optional controller
 MACs in the private settings file and rerun the preflight.
 
+If Monado logs still show:
+
+```
+Got devices:
+  left: <none> (<none>)
+  right: <none> (<none>)
+```
+
+even when both Sense controllers are paired and visible in Bluetooth, set
+`PSVR2_LOAD_PSVR2_SENSE=1` (and restart Monado), then verify that Monado logs
+emit `Init playstation_vr2_sense module...` and `TrackedDeviceAdded` lines.
+
 ## Blue Monado environment after leaving a game or reconnecting
 
 The blue space is Monado's fallback environment, not a tracking failure. It
@@ -49,7 +61,7 @@ enabled. Rebuild with `XRT_BUILD_DRIVER_PSVR2=ON` and restart:
 ./scripts/prepare-envision-runtime.sh
 cd ~/.local/share/envision/psvr2-toolkit-monado/xrservice
 cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado \
-  -DXRT_BUILD_DRIVER_PSVR2=ON -DXRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE=ON -DXRT_BUILD_DRIVER_PSSENSE=OFF
+  -DXRT_BUILD_DRIVER_PSVR2=ON -DXRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE=ON -DXRT_BUILD_DRIVER_PSSENSE=ON
 cmake --build build -j4 && cmake --install build
 systemctl --user restart psvr2-autostart-monitor.service
 ```

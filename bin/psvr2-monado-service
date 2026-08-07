@@ -2,15 +2,19 @@
 set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
 
-# Keep SteamVR Lighthouse helpers disabled unless explicitly enabled.
+# Keep SteamVR Lighthouse base-station support disabled unless explicitly enabled.
+# Keep PSVR2 Sense discovery enabled by default because it carries controller input.
+psvr2_sense="${PSVR2_LOAD_PSVR2_SENSE:-${LH_LOAD_PSVR2:-1}}"
 export STEAMVR_LH_ENABLE="${PSVR2_ENABLE_STEAMVR_LH:-0}"
 if [[ "${PSVR2_ENABLE_STEAMVR_LH:-0}" == "1" ]]; then
-    export LH_LOAD_PSVR2=true
     export LH_LOAD_LIGHTHOUSE=true
 else
-    export LH_LOAD_PSVR2=false
     export LH_LOAD_LIGHTHOUSE=false
 fi
+case "$psvr2_sense" in
+    0|false|FALSE|off|OFF|disabled|DISABLED|no|NO) export LH_LOAD_PSVR2=false ;;
+    *) export LH_LOAD_PSVR2=true ;;
+esac
 export LH_DISCOVER_WAIT_MS=5000
 export XRT_COMPOSITOR_SCALE_PERCENTAGE="$PSVR2_RENDER_SCALE"
 export XRT_COMPOSITOR_COMPUTE=1
