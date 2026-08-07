@@ -87,6 +87,17 @@ or below the user until the next VR-runtime restart.
 Power on the headset and controllers. The USB monitor starts Monado and WayVR,
 which opens directly to installed Steam VR games. Select a cover and Play.
 
+The WayVR game cache is regenerated from Steam manifest changes whenever you install
+or remove titles, and again whenever Monado/WayVR launches. If you add a new
+Steam title and it does not appear immediately, run:
+
+```bash
+psvr2-sync-steam-vr-games --discovery-only
+```
+
+This can be run while Steam is running and only refreshes the WayVR cache; it does
+not change launch options or Steam config files.
+
 `psvr2-sync-steam-vr-games` also handles games whose native Linux depot omits
 VR. In particular, **Keep Talking and Nobody Explodes** is pinned to Proton
 Experimental so its Windows-only VR mode is selected when launched from the

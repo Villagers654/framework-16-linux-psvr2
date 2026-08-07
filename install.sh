@@ -74,7 +74,8 @@ if [[ "$mode" == user ]]; then
 
     systemctl --user daemon-reload
     systemctl --user enable psvr2-autostart-monitor.service \
-        psvr2-steamvr-bridge.path psvr2-steamvr-maintenance.path
+        psvr2-steamvr-bridge.path psvr2-steamvr-maintenance.path \
+        psvr2-steam-vr-sync.path
     update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
     echo "User integration installed. Review ~/.config/psvr2-linux/settings.env."
     exit 0

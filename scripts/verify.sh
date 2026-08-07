@@ -31,6 +31,7 @@ check grep -aFq 'PSVR2 Spectator View' "$HOME/.local/share/envision/prefixes/psv
 check python3 -m json.tool "$HOME/.local/share/psvr2-setup/unity-setup/PSVR2Toolkit.UnitySetup_Data/StreamingAssets/SteamVR/bindings_oculus_touch.json" >/dev/null
 check python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["steamvr"]; assert s["preferredRefreshRate"] == 120 and s["supersampleManualOverride"] is True and s["supersampleScale"] == 1.0' "$STEAM_ROOT/config/steamvr.vrsettings"
 check systemctl --user is-enabled --quiet psvr2-autostart-monitor.service
+check systemctl --user is-enabled --quiet psvr2-steam-vr-sync.path
 check grep -aFq 'PSVR2 Room Setup' "$HOME/.local/share/psvr2-setup/wayvr/wayvr"
 lsusb -d 054c:0cde >/dev/null || echo 'WARN PSVR2 adapter is not currently connected'
 exit "$failed"

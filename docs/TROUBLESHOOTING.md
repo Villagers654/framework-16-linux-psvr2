@@ -95,6 +95,18 @@ not switch it back to the Linux runtime if you want to launch it in VR.
 The helper additionally restores the known-good KTaNE profile (`VSync=0`, MSAA
 off) while leaving the global 120 Hz / 170% PSVR2 target unchanged.
 
+## Games do not appear in WayVR's Games tab after installation
+
+This cache is refreshed automatically from Steam manifest changes. If you installed
+new titles while already in VR and one is missing, run a non-intrusive refresh:
+
+```bash
+psvr2-sync-steam-vr-games --discovery-only
+```
+
+If a title still does not show in the Games tab, restart Monado/WayVR (`psvr2-fossvr-stop`
+then `psvr2-fossvr-start`) so WayVR reloads the cache once with a clean runtime.
+
 ## SteamVR DRM lease error on GNOME Wayland
 
 The normal play path here is Monado + xrizer, not Valve's compositor. Direct

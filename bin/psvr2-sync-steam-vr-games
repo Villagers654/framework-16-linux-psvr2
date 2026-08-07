@@ -2,8 +2,15 @@
 """Persist the Monado wrapper for installed Steam VR titles."""
 
 from __future__ import annotations
-import json, os, re, stat, sys, tempfile, urllib.request
+import argparse
+import json
+import os
+import re
+import stat
+import sys
+import tempfile
 from pathlib import Path
+import urllib.request
 
 HOME = Path.home()
 CONFIG = HOME / ".config/psvr2-linux/settings.env"
@@ -41,12 +48,27 @@ def steam_running() -> bool:
     return False
 
 def installed_apps() -> dict[str, str]:
-    apps = {}
-    for manifest in STEAM.glob("steamapps/appmanifest_*.acf"):
-        text = manifest.read_text(errors="replace")
-        appid = re.search(r'^\s*"appid"\s+"(\d+)"', text, re.M)
-        name = re.search(r'^\s*"name"\s+"([^"]+)"', text, re.M)
-        if appid: apps[appid.group(1)] = name.group(1) if name else appid.group(1)
+    def parse_root(root: Path) -> dict[str, str]:
+        apps = {}
+        for manifest in root.glob("appmanifest_*.acf"):
+            text = manifest.read_text(errors="replace")
+            appid = re.search(r'^\s*"appid"\s+"(\d+)"', text, re.M)
+            name = re.search(r'^\s*"name"\s+"([^"]+)"', text, re.M)
+            if appid: apps[appid.group(1)] = name.group(1) if name else appid.group(1)
+        return apps
+
+    apps: dict[str, str] = {}
+    roots = {STEAM / "steamapps"}
+    library_file = STEAM / "config/libraryfolders.vdf"
+    if library_file.exists():
+        for match in re.finditer(r'"path"\s+"([^"]+)"', library_file.read_text(errors="replace")):
+            raw_path = os.path.expandvars(match.group(1))
+            normalized = raw_path.replace("\\\\", "/").replace("\\", "/")
+            root = Path(os.path.expanduser(normalized))
+            if (root / "steamapps").exists():
+                roots.add(root / "steamapps")
+    for root in sorted(roots):
+        apps.update(parse_root(root))
     return apps
 
 def store_says_vr(appid: str) -> bool:
@@ -148,7 +170,11 @@ def patch_ktane_settings(path: Path) -> bool:
     temporary.chmod(mode); os.replace(temporary, path); return True
 
 def main() -> int:
-    if steam_running(): return 0
+    parser = argparse.ArgumentParser(description="Sync Steam VR launch metadata for WayVR.")
+    parser.add_argument("--discovery-only", action="store_true", help="Only refresh the WayVR cache.")
+    parser.add_argument("--force", action="store_true", help="Allow launch-option patching while Steam is running.")
+    args = parser.parse_args()
+
     apps = installed_apps(); cache = dict(KNOWN)
     try: cache.update(json.loads(STATE.read_text()))
     except (FileNotFoundError, json.JSONDecodeError): pass
@@ -158,11 +184,16 @@ def main() -> int:
             except Exception: continue
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps(cache, indent=2, sort_keys=True) + "\n")
+    patch_launch_options = (not args.discovery_only) and (args.force or not steam_running())
     vr = {appid for appid in apps if cache.get(appid) is True}
-    for config in (STEAM / "userdata").glob("[0-9]*/config/localconfig.vdf"):
-        patch_localconfig(config, vr)
-    steam_config = STEAM / "config/config.vdf"
-    if steam_config.exists(): patch_compat_tools(steam_config)
+    if patch_launch_options:
+        for config in (STEAM / "userdata").glob("[0-9]*/config/localconfig.vdf"):
+            patch_localconfig(config, vr)
+        steam_config = STEAM / "config/config.vdf"
+        if steam_config.exists(): patch_compat_tools(steam_config)
+    else:
+        if args.discovery_only:
+            print("PSVR2: Steam is running; skipping launch-option patching (cache refresh only).")
     patch_ktane_settings(KTANE_SETTINGS)
     return 0
 

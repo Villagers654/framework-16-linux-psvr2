@@ -1,0 +1,11 @@
+[Unit]
+Description=Watch Steam library manifests for new VR title installs
+
+[Path]
+PathChanged=%h/.local/share/Steam/steamapps
+PathChanged=%h/.local/share/Steam/config/libraryfolders.vdf
+PathChanged=%h/.local/share/Steam/steamapps/libraryfolders.vdf
+Unit=psvr2-steam-vr-sync.service
+
+[Install]
+WantedBy=default.target
