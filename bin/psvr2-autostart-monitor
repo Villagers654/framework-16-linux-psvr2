@@ -9,6 +9,8 @@ link_check_interval=${PSVR2_LINK_STABILITY_INTERVAL_SECONDS:-1}
 startup_retry_base=${PSVR2_STARTUP_RETRY_BASE_SECONDS:-12}
 startup_retry_max=${PSVR2_STARTUP_RETRY_MAX_SECONDS:-120}
 startup_retry_attempts=${PSVR2_STARTUP_RETRY_ATTEMPTS:-3}
+controller_role_repair_backoff_seconds=${PSVR2_CONTROLLER_ROLE_REPAIR_BACKOFF_SECONDS:-18}
+controller_role_repair_attempt_limit=${PSVR2_CONTROLLER_ROLE_REPAIR_ATTEMPTS:-3}
 openvr_failure_streak_threshold=${PSVR2_OPENVR_FAILURE_STREAK_THRESHOLD:-2}
 openvr_recovery_cooldown=${PSVR2_OPENVR_FAILURE_RECOVERY_SECONDS:-90}
 runtime_failure_streak_threshold=${PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD:-$openvr_failure_streak_threshold}
@@ -23,11 +25,11 @@ connection_state_file="${PSVR2_CONNECTION_STATE_FILE:-}"
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 start_helper="$helper_dir/psvr2-fossvr-start"
 stop_helper="$helper_dir/psvr2-fossvr-stop"
-controller_helper="$helper_dir/psvr2-controller-preflight"
 next_retry=0
 runtime_failure_streak=0
-last_controller_repair=0
-controller_repair_backoff=5
+required_controller_count="${PSVR2_REQUIRED_CONTROLLER_COUNT:-2}"
+last_controller_role_repair=0
+controller_role_repair_attempts=0
 
 load_runtime_failure_state() {
     if [[ -r "$runtime_failure_state_file" ]]; then
@@ -53,7 +55,7 @@ clear_runtime_state() {
     clear_runtime_cooldown
 }
 
-for helper in "$start_helper" "$stop_helper" "$controller_helper"; do
+for helper in "$start_helper" "$stop_helper"; do
     if [[ ! -x "$helper" ]]; then
         echo "Required PSVR2 helper is missing or not executable: $helper" >&2
         exit 1
@@ -160,6 +162,80 @@ controller_count() {
         done
     done
     printf '%s\n' "$count"
+}
+
+extract_controller_role() {
+    local device_side=$1 logs=$2 line value
+    line=$(grep -m 1 -E "^[[:space:]]*${device_side}:" <<<"$logs" | tail -n 1 || true)
+    if [[ -z "$line" ]]; then
+        return 1
+    fi
+    value=$(sed -E "s/^[[:space:]]*${device_side}:[[:space:]]*//; s/[[:space:]]+$//" <<<"$line")
+    value=${value// /}
+    if [[ -z "$value" ]]; then
+        return 1
+    fi
+    if [[ "$value" == -1 ]]; then
+        return 1
+    fi
+    if [[ "$value" == "<none>" || "$value" == "<none/>" || "$value" == "none" ]]; then
+        return 1
+    fi
+    if [[ "$value" == "<none>"* ]]; then
+        return 1
+    fi
+    if [[ "$value" == *"(<none>)" ]]; then
+        return 1
+    fi
+    printf '%s\n' "$value"
+    return 0
+}
+
+controller_roles_are_assigned() {
+    local pid=$1 logs left right
+    logs=$(journalctl --user -u psvr2-fossvr.service "_PID=$pid" -n 220 --no-pager 2>/dev/null -o cat || true)
+    left=$(extract_controller_role left "$logs" || true)
+    right=$(extract_controller_role right "$logs" || true)
+    if [[ -n "$left" && -n "$right" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+ensure_monado_controller_roles() {
+    local controllers=$1 now=$2 pid
+    if (( controllers < required_controller_count )); then
+        return 0
+    fi
+    if (( now - last_controller_role_repair < controller_role_repair_backoff_seconds )); then
+        return 0
+    fi
+    if (( controller_role_repair_attempts >= controller_role_repair_attempt_limit )); then
+        return 0
+    fi
+    if ! is_runtime_active; then
+        return 0
+    fi
+
+    pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value 2>/dev/null || true)
+    if [[ -z "$pid" || "$pid" == "0" || "$pid" == "n/a" ]]; then
+        return 0
+    fi
+
+    if controller_roles_are_assigned "$pid"; then
+        controller_role_repair_attempts=0
+        return 0
+    fi
+
+    if (( controller_role_repair_attempts >= controller_role_repair_attempt_limit )); then
+        return 0
+    fi
+    controller_role_repair_attempts=$((controller_role_repair_attempts + 1))
+    last_controller_role_repair=$now
+    echo "PSVR2 controllers are present but XR roles are not assigned; restarting Monado to refresh roles (${controller_role_repair_attempts}/${controller_role_repair_attempt_limit})."
+    PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
+    sleep 1
+    start_runtime || true
 }
 
 is_runtime_active() {
@@ -278,7 +354,7 @@ start_runtime() {
         fi
     done
 
-    echo "PSVR2 failed to start after ${startup_retry_attempts} attempts; reconnect it to try again" >&2
+    echo "PSVR2 failed to start after ${startup_retry_attempts} attempts; retrying startup" >&2
     next_retry=$((SECONDS + backoff))
     set_runtime_cooldown "$runtime_retry_cooldown"
     return 1
@@ -308,6 +384,8 @@ while true; do
                 start_runtime || true
                 previous=$current
                 previous_controllers=$(controller_count)
+                last_controller_role_repair=0
+                controller_role_repair_attempts=0
             else
                 next_retry=$((SECONDS + startup_retry_base))
                 # Keep previous state until we actually see a sustained link.
@@ -327,6 +405,8 @@ while true; do
                 next_retry=0
                 previous=$current
                 previous_controllers=$(controller_count)
+                last_controller_role_repair=0
+                controller_role_repair_attempts=0
             fi
             # transient disconnects are ignored to avoid restart loops while
             # Sony's USB/DisplayPort links re-negotiate.
@@ -337,27 +417,12 @@ while true; do
     elif [[ "$current" == connected ]]; then
         controllers=$(controller_count)
         now=$(date +%s)
-        if (( controllers > previous_controllers )) && is_runtime_active; then
-            sleep 2
-            "$controller_helper" || true
-            echo "PSVR2 controllers hot-connected; keeping the active runtime"
-            controllers=$(controller_count)
-        elif (( controllers < previous_controllers )) && is_runtime_active; then
-            if (( now - last_controller_repair >= controller_repair_backoff )); then
-                echo "PSVR2 detected fewer controllers than before; attempting reconnect"
-                "$controller_helper" || true
-                last_controller_repair=$now
-                controllers=$(controller_count)
-            fi
-        elif (( controllers == 0 )) && is_runtime_active; then
-            if (( now - last_controller_repair >= controller_repair_backoff )); then
-                echo "PSVR2 sees no controllers in runtime; attempting reconnect"
-                "$controller_helper" || true
-                last_controller_repair=$now
-                controllers=$(controller_count)
-            fi
-        fi
+        ensure_monado_controller_roles "$controllers" "$now" || true
         previous_controllers=$controllers
+        if is_runtime_active && ! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then
+            echo "PSVR2 WayVR dashboard is not running while runtime is active; restarting it"
+            systemctl --user restart psvr2-fossvr-wayvr.service || true
+        fi
         if ! is_runtime_active \
             && [[ ! -e "$suppress_file" ]] && (( SECONDS >= next_retry )); then
             if headset_state_stable 1 "$((link_stability_checks * link_check_interval))" "$link_stability_checks"; then

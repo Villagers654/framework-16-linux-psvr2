@@ -4,10 +4,9 @@ source "$HOME/.local/lib/psvr2-linux/common.sh"
 
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 runtime_preflight="$helper_dir/psvr2-runtime-preflight"
-controller_preflight="$helper_dir/psvr2-controller-preflight"
 chaperone_sanity="$helper_dir/psvr2-chaperone-sanity"
 audio_helper="$helper_dir/psvr2-audio"
-for helper in "$runtime_preflight" "$controller_preflight" "$chaperone_sanity" "$audio_helper"; do
+for helper in "$runtime_preflight" "$chaperone_sanity" "$audio_helper"; do
     if [[ ! -x "$helper" ]]; then
         echo "Required PSVR2 helper is missing or not executable: $helper" >&2
         exit 1
@@ -57,6 +56,7 @@ lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 exec 8>"$lock_dir/psvr2-fossvr-start.lock"
 flock 8
 "$helper_dir/psvr2-sync-steam-vr-games" --discovery-only || true
+systemctl --user start psvr2-autostart-monitor.service || true
 assert_monado_profile_supports_psvr2
 assert_monado_binary_has_psvr2_builder
 
@@ -90,7 +90,6 @@ if systemctl --user is-active --quiet psvr2-fossvr.service; then
     echo "Refusing to replace the Monado socket while the PSVR2 service is still active" >&2
     exit 1
 fi
-"$controller_preflight" || true
 systemctl --user reset-failed psvr2-fossvr.service psvr2-fossvr-wayvr.service 2>/dev/null || true
 
 [[ ! -S "$socket" ]] || unlink "$socket"
@@ -132,7 +131,16 @@ is_monado_failed() {
     local logs
     logs=$(journalctl --user -u psvr2-fossvr.service "_PID=$pid" -o cat --no-pager 2>/dev/null || true)
 
-    grep -Eq "XRT_ERROR_DEVICE_CREATION_FAILED|No builder selected in config|Unable to find HMD|PSVR2 HMD device creation failed|Could not allocate" <<<"$logs"
+    if grep -Eq "XRT_ERROR_DEVICE_CREATION_FAILED|Unable to find HMD|PSVR2 HMD device creation failed|Could not allocate" <<<"$logs"; then
+        return 0
+    fi
+
+    # "No builder selected in config" is normal while probing until a backend wins.
+    # Only treat it as failure when a final selected backend is missing.
+    if grep -Fq "No builder selected in config" <<<"$logs" && ! grep -Fq "Selected psvr2 because" <<<"$logs"; then
+        return 0
+    fi
+    return 1
 }
 
 extract_controller_role() {
@@ -143,10 +151,21 @@ extract_controller_role() {
     fi
     value=$(sed -E "s/^[[:space:]]*${device_side}:[[:space:]]*//; s/[[:space:]]+$//" <<<"$line")
     value=${value// /}
-    if [[ -z "$value" || "$value" == "<none>" || "$value" == "<none/>" || "$value" == "none" ]]; then
+    # Real roles come through as a device name or descriptor.
+    # A literal "<none> (<none>)" means role slot is unassigned.
+    if [[ -z "$value" ]]; then
         return 1
     fi
-    if [[ "$value" == "-1" ]]; then
+    if [[ "$value" == -1 ]]; then
+        return 1
+    fi
+    if [[ "$value" == "<none>" || "$value" == "<none/>" || "$value" == "none" ]]; then
+        return 1
+    fi
+    if [[ "$value" == "<none>"* ]]; then
+        return 1
+    fi
+    if [[ "$value" == *"(<none>)" ]]; then
         return 1
     fi
     printf '%s\n' "$value"
@@ -169,9 +188,6 @@ await_controller_roles() {
             break
         fi
 
-        if (( attempt % 5 == 0 )); then
-            "$controller_preflight" || true
-        fi
         attempt=$((attempt + 1))
         sleep 0.5
     done
@@ -213,13 +229,7 @@ if (( ! runtime_healthy )); then
 fi
 
 if ! await_controller_roles "$service_pid"; then
-    echo "Monado started but controller roles were not assigned; attempting one final reconnect and retry" >&2
-    "$controller_preflight" || true
-    sleep 2
-    if ! await_controller_roles "$service_pid"; then
-        systemctl --user stop psvr2-fossvr.service || true
-        exit 1
-    fi
+    echo "Monado started but controller roles were not assigned yet; WayVR will start and the monitor will retry role assignment."
 fi
 
 systemctl --user start psvr2-fossvr-wayvr.service

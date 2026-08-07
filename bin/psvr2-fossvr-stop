@@ -23,7 +23,8 @@ if [[ "$state" != inactive && "$state" != failed ]]; then
     systemctl --user kill --kill-whom=all --signal=SIGKILL psvr2-fossvr.service || true
 fi
 systemctl --user stop psvr2-fossvr.service || true
-if [[ "${PSVR2_DISCONNECT_CONTROLLERS:-1}" == "1" ]] && [[ -x "$controller_disconnect" ]]; then
+if [[ "${PSVR2_DISCONNECT_CONTROLLERS:-1}" == "1" ]] && \
+    [[ "${PSVR2_AUTOMATED_STOP:-0}" != "1" ]] && [[ -x "$controller_disconnect" ]]; then
     "$controller_disconnect" || true
 fi
 [[ ! -x "$runtime_preflight" ]] || "$runtime_preflight" || true

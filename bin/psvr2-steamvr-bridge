@@ -16,7 +16,6 @@ exec 8>"$lock_dir/psvr2-fossvr-start.lock"
 flock 8
 
 "$helper_dir/psvr2-runtime-preflight" || true
-"$helper_dir/psvr2-controller-preflight" || true
 
 # Keep 120 Hz, the runtime-recommended 1.7x target, supersample filtering, and
 # native frames. Linux motion smoothing caused visible ghosting in testing.

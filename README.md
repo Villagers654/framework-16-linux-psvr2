@@ -147,7 +147,9 @@ controller pairing, read [docs/SETUP.md](docs/SETUP.md).
   `psvr2-spectator toggle` to change that choice persistently. The command
   cleanly restarts an active VR session; add `--no-restart` to defer it. GNOME's
   app grid also contains **Toggle PSVR2 Spectator View**.
-- Turn controllers on afterward: the monitor detects them and refreshes Monado.
+- Turn controllers on afterward: the monitor detects them and, if both are connected by
+  Bluetooth and exposed as HID, it refreshes controller role mapping to keep
+  Monado accurate in WayVR/Room Setup.
 - Configure once with **PSVR2 Chaperone Setup** (or `psvr2-chaperone configure`) to
   render warning walls and fade geometry around your room boundary.
 - Warning geometry is visual-only and does not hard-block movement.
