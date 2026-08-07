@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PSVR2 Chaperone Setup
+Comment=Configure the OpenXR boundary warning overlay
+Exec=@HOME@/.local/bin/psvr2-chaperone configure
+Icon=video-display
+Terminal=true
+Categories=Game;

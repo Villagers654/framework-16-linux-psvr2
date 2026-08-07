@@ -82,7 +82,28 @@ because the PSVR2 driver and xrizer both capture the standing/raw transform at
 process startup; without the reload, a newly saved boundary can appear above
 or below the user until the next VR-runtime restart.
 
-## 5. Everyday use
+## 5. Oculus-style visual boundary overlay
+
+After a valid room is saved, run once:
+
+```bash
+psvr2-chaperone configure
+```
+
+That writes `~/.config/xr-chaperone/chaperone.toml` and captures your room
+polygon for warning visual geometry and fade behavior.
+
+The overlay is started automatically from `psvr2-fossvr-start` and `psvr2-room-setup`
+to keep your existing room setup flow unchanged.
+
+Disable it temporarily in `~/.config/psvr2-linux/settings.env` if a title needs
+unrestricted space:
+
+```bash
+perl -i -pe 's/^PSVR2_CHAPERONE_ENABLE=.*/PSVR2_CHAPERONE_ENABLE=0/' ~/.config/psvr2-linux/settings.env
+```
+
+## 6. Everyday use
 
 Power on the headset and controllers. The USB monitor starts Monado and WayVR,
 which opens directly to installed Steam VR games. Select a cover and Play.

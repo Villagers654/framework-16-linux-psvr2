@@ -1,0 +1,65 @@
+#!/usr/bin/bash
+set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  psvr2-chaperone [service|configure]
+
+service    (default) run xr-chaperone in service mode (-s)
+configure  run xr-chaperone setup wizard on the host monitor
+status     print current effective settings
+USAGE
+}
+
+mode=service
+if [[ "${1:-}" == "configure" || "${1:-}" == "--configure" ]]; then
+    mode=configure
+elif [[ "${1:-}" == "status" ]]; then
+    echo "enabled=$PSVR2_CHAPERONE_ENABLE"
+    echo "binary=$PSVR2_CHAPERONE_BINARY"
+    echo "service_args=${PSVR2_CHAPERONE_SERVICE_ARGS:-}"
+    exit 0
+elif [[ "${1:-}" == "service" || "${1:-}" == "--service" || -z "${1:-}" ]]; then
+    mode=service
+elif [[ -n "${1:-}" ]]; then
+    usage
+    exit 2
+fi
+
+binary="$PSVR2_CHAPERONE_BINARY"
+if [[ ! -f "$binary" ]]; then
+    echo "PSVR2 chaperone binary not found: $binary" >&2
+    echo "Run ./scripts/fetch-community-tools.sh to download xr-chaperone." >&2
+    exit 1
+fi
+if [[ ! -x "$binary" ]]; then
+    chmod +x "$binary"
+fi
+
+if [[ "$mode" == "service" && "${PSVR2_CHAPERONE_ENABLE:-0}" != "1" ]]; then
+    echo "PSVR2 chaperone is disabled in settings.env"
+    exit 0
+fi
+
+export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
+export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
+
+read -r -a extra_args <<<"${PSVR2_CHAPERONE_SERVICE_ARGS:-}"
+
+case "$mode" in
+    configure)
+        "$binary"
+        ;;
+    service)
+        if ! printf '%s\\n' "${extra_args[*]}" | grep -q -- '-s'; then
+            extra_args+=("-s")
+        fi
+        "$binary" "${extra_args[@]}"
+        ;;
+    *)
+        usage
+        exit 2
+        ;;
+esac

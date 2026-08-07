@@ -1,0 +1,13 @@
+[Unit]
+Description=PSVR2 OpenXR chaperone warning overlay
+Documentation=https://github.com/FrostyCoolSlug/xr-chaperone
+After=psvr2-fossvr.service psvr2-fossvr-wayvr.service
+PartOf=psvr2-fossvr.service
+BindsTo=psvr2-fossvr.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/psvr2-chaperone
+Restart=always
+RestartSec=5
+TimeoutStopSec=5

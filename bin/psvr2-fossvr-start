@@ -91,5 +91,12 @@ sleep 1
 systemctl --user is-active --quiet psvr2-fossvr-wayvr.service || {
     journalctl --user -u psvr2-fossvr-wayvr.service -n 60 --no-pager >&2; exit 1;
 }
+if [[ "${PSVR2_CHAPERONE_ENABLE:-0}" == 1 ]]; then
+    if [[ -x "${PSVR2_CHAPERONE_BINARY}" ]]; then
+        systemctl --user start psvr2-chaperone.service || true
+    else
+        echo "PSVR2 chaperone is enabled but the AppImage is missing at ${PSVR2_CHAPERONE_BINARY}; run ./scripts/fetch-community-tools.sh"
+    fi
+fi
 "$audio_helper" vr || true
 echo "PSVR2 ready: ${PSVR2_REFRESH_RATE} Hz / ${PSVR2_RENDER_SCALE}% + WayVR."

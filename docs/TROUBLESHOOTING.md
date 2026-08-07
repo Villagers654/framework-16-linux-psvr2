@@ -27,6 +27,33 @@ calibration, run:
 systemctl --user restart psvr2-fossvr-wayvr.service
 ```
 
+## Headset enters a boot/restart loop
+
+The autostart monitor now protects against short USB/DP flaps and repeated
+hard-runtime failures by requiring sustained link-state transitions before it
+stops/starts services and by enforcing a cooldown window after repeated failures.
+
+- `PSVR2_LINK_DISCONNECT_CHECKS` (default `2`) controls how many consecutive
+  negative link samples are required before a disconnect is considered real.
+- `PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS` (default `90`) pauses startup after
+  repeated hard failures.
+
+If the headset remains unstable after a cable/DP reconnect, clear stale state and
+reseed the loop with a clean retry:
+
+```bash
+psvr2-fossvr-stop
+rm -f "$XDG_RUNTIME_DIR/psvr2-startup-cooldown"
+psvr2-fossvr-start
+```
+
+If a restart loop still appears, capture the last 200 monitor and Monado lines:
+
+```bash
+journalctl --user -u psvr2-autostart-monitor.service -n 300 --no-pager
+journalctl --user -u psvr2-fossvr.service -n 300 --no-pager
+```
+
 ## VR processes remain after physically disconnecting PSVR2
 
 The lifecycle monitor requires both the Sony USB device and a connected DRM
@@ -64,6 +91,19 @@ This is not a standing-only calibration problem. It means the app's optional
 
 The binding supplies Sense actions; the scoped xrizer patch supplies proximity
 only when `psvr2-room-setup` sets `XRIZER_FORCE_HEADSET_ON_HEAD=1`.
+
+## Boundary warning overlay is missing or not showing in games
+
+Run the overlay setup wizard once so xr-chaperone has a polygon to render:
+
+```bash
+psvr2-chaperone configure
+```
+
+This writes `~/.config/xr-chaperone/chaperone.toml`. The boundary visual is a
+warning cue only in this repo's Monado path; it does not hard-block movement.
+If a title appears to ignore the warning area, verify the Monado service is
+running and `psvr2-chaperone` is enabled in `settings.env`.
 
 ## Room Setup UI tracks correctly but passthrough is beside or behind you
 

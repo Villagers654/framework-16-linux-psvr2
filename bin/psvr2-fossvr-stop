@@ -10,6 +10,7 @@ if [[ "${PSVR2_AUTOMATED_STOP:-0}" != 1 ]]; then
     touch "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 fi
 systemctl --user stop psvr2-fossvr-wayvr.service
+systemctl --user stop psvr2-chaperone.service || true
 systemctl --user stop --no-block psvr2-fossvr.service
 for _ in $(seq 1 20); do
     state=$(systemctl --user show psvr2-fossvr.service -p ActiveState --value)

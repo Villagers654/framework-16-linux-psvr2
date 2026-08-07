@@ -13,6 +13,8 @@
 - [xrizer](https://github.com/Supreeeme/xrizer) — OpenVR-on-OpenXR translation.
 - [WayVR](https://github.com/wayvr-org/wayvr) — in-headset launcher, desktop,
   and dashboard.
+- [xr-chaperone](https://github.com/FrostyCoolSlug/xr-chaperone) — optional
+  OpenXR visual boundary overlay (warning wall and fade).
 - [SteamVR Linux Fixes](https://github.com/BnuuySolutions/SteamVRLinuxFixes) —
   Vulkan compatibility layer for the optional Valve compositor path.
 - [xr-hardware](https://github.com/CollaboraLtd/udev-hmd) — canonical udev IDs.

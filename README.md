@@ -11,7 +11,7 @@ The finished experience is deliberately console-like:
 3. The headset opens directly to a filtered grid of installed Steam VR games.
 4. **PSVR2 Room Setup** is in that grid beside the games.
 5. Point, pull the trigger, and play.
-6. A borderless fullscreen spectator view appears on the laptop display.
+6. Optional visual boundary warning wall is available for all games in service mode.
 
 The tested default is **120 Hz** at Monado's **170% compositor scale**, which
 reports a distortion-corrected recommendation of **3400×3468 per eye** on this
@@ -29,6 +29,7 @@ PSVR2. Per-game Steam resolution overrides remain available.
 | PSVR2 Toolkit + Ignition | **Linux PSVR2** | Runs Sony's SteamVR driver through Proton and exposes it to Linux VR runtimes. |
 | Supremium Monado + xrizer | **Linux PSVR2** | Supplies OpenXR and translates OpenVR games without relying on SteamVR's compositor. |
 | WayVR launcher patches | **Linux PSVR2** | Opens a VR-only game grid, launches explicit VR modes, and binds native Sense controls. |
+| xr-chaperone | **Linux OpenXR** | Provides Oculus-style visual boundary warnings from your PSVR2 play area in a separate overlay process. |
 | `bluetooth.disable_ertm=1` | **Linux / controller-specific** | Compatibility workaround for Sense Bluetooth pairing; try without it first on current kernels. |
 | `amdgpu.dcdebugmask=0xc10` | **AMD-specific, experimental** | The exact setting used on the tested machine to stabilize direct-display/DRM behavior. Do not apply on Intel/NVIDIA. |
 | AMD VR power profile service | **AMD-specific** | Prevents between-frame dGPU downclocking and runtime suspend while PSVR2 is connected. |
@@ -64,6 +65,7 @@ before running the quick start.
 | Host services | systemd user services, udev, BlueZ, PipeWire, and WirePlumber | Required for automatic startup, device permissions, Sense pairing, and PSVR2 audio routing. |
 | Script utilities | Bash, Git, cURL, UnZip, `jq`, Python 3, `usbutils`, `pciutils`, and `iproute` | These supply `git`, `curl`, `unzip`, `jq`, `python3`, `lsusb`, `lspci`, and `ss`. Internet access to GitHub, GitLab, Steam, and Homebrew is required during setup. |
 | WayVR build | Rust/Cargo, CMake, Ninja, Meson, pkg-config, shaderc, ALSA, PipeWire, xkbcommon, D-Bus, and OpenSSL development files | The tested Bazzite setup supplies this self-contained toolchain through Homebrew; equivalent distribution development packages also work. |
+| xr-chaperone | `zip` + `AppImage` runtime | `scripts/fetch-community-tools.sh` fetches this AppImage and places it in `$PSVR2_SETUP_ROOT/xr-chaperone`. |
 | Screenshot shortcut | `wmctrl`, ImageMagick, and `notify-send` | Optional. Only required for the PS-button + trigger screenshot chord. |
 
 The headset and Sony PC adapter must have PC-compatible firmware. If the
@@ -123,6 +125,9 @@ Then:
 5. Run `./scripts/verify-haptics.sh` for a controller-feedback validation pass.
 6. Reboot if you installed optional kernel arguments.
 
+7. Launch the boundary warning setup once:
+   `psvr2-chaperone configure`
+
 The installer never overwrites an existing settings file. Review it here:
 
 ```bash
@@ -143,6 +148,10 @@ controller pairing, read [docs/SETUP.md](docs/SETUP.md).
   cleanly restarts an active VR session; add `--no-restart` to defer it. GNOME's
   app grid also contains **Toggle PSVR2 Spectator View**.
 - Turn controllers on afterward: the monitor detects them and refreshes Monado.
+- Configure once with **PSVR2 Chaperone Setup** (or `psvr2-chaperone configure`) to
+  render warning walls and fade geometry around your room boundary.
+- Warning geometry is visual-only and does not hard-block movement.
+- Set `PSVR2_CHAPERONE_ENABLE=0` in `settings.env` to disable the overlay.
 - Press either PS button: show or hide the WayVR dashboard.
 - Press either PS button, then pull either trigger within half a second: save the VR mirror to
   `~/Pictures/VR Screenshots/`.
