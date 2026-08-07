@@ -105,19 +105,54 @@ for _ in $(seq 1 100); do
 done
 [[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket" || { echo "Monado IPC socket was not created" >&2; exit 1; }
 
-# A live IPC socket only proves that monado-service started. The proprietary
+is_monado_hmd_ready() {
+    local pid=$1
+    local logs
+    logs=$(journalctl --user -u psvr2-fossvr.service "_PID=$pid" -o cat --no-pager 2>/dev/null || true)
+
+    # Successful start signs: explicit headset enumeration and selected-system
+    # success. These strings are stable across recent Monado log formats.
+    if grep -Fq "Got devices:" <<<"$logs" && grep -Fq "Result: XRT_SUCCESS" <<<"$logs"; then
+        if grep -Fq "PS VR2 HMD" <<<"$logs"; then
+            return 0
+        fi
+    fi
+
+    if grep -Fq "head: PS VR2 HMD" <<<"$logs"; then
+        return 0
+    fi
+
+    return 1
+}
+
+is_monado_failed() {
+    local pid=$1
+    local logs
+    logs=$(journalctl --user -u psvr2-fossvr.service "_PID=$pid" -o cat --no-pager 2>/dev/null || true)
+
+    grep -Eq "XRT_ERROR_DEVICE_CREATION_FAILED|No builder selected in config|Unable to find HMD|PSVR2 HMD device creation failed|Could not allocate" <<<"$logs"
+}
+
+# A live IPC socket only proves monado-service started. The proprietary
 # PSVR2 driver can remain alive after USB initialization fails, leaving a
 # headless runtime that systemd incorrectly reports as healthy. Do not probe
 # Monado while Sony's driver is still claiming its USB interfaces: concurrent
-# probing can race that initialization. Wait for this service process to report
+# probing can race that initialization. Wait for the service process to report
 # the fully-created HMD; WayVR starting successfully below is the IPC check.
 runtime_healthy=0
 for _ in $(seq 1 80); do
-    if journalctl --user -u psvr2-fossvr.service "_PID=$service_pid" -o cat --no-pager \
-        | grep -Fq "head: SIE PS VR2"; then
+    if is_monado_hmd_ready "$service_pid"; then
         runtime_healthy=1
         break
     fi
+
+    if is_monado_failed "$service_pid"; then
+        echo "Monado startup reached a runtime creation failure" >&2
+        journalctl --user -u psvr2-fossvr.service -n 120 --no-pager >&2
+        systemctl --user stop psvr2-fossvr.service || true
+        exit 1
+    fi
+
     systemctl --user is-active --quiet psvr2-fossvr.service || break
     sleep 0.25
 done

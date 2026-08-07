@@ -1,0 +1,205 @@
+diff --git a/src/xrt/drivers/psvr2/psvr2.c b/src/xrt/drivers/psvr2/psvr2.c
+index 2837ffb..e2fe884 100644
+--- a/src/xrt/drivers/psvr2/psvr2.c
++++ b/src/xrt/drivers/psvr2/psvr2.c
+@@ -59,6 +59,9 @@
+ 
+ // @todo Once clang format is updated in CI, remove this
+ // clang-format off
++#define PSVR2_USB_OPEN_ATTEMPTS 6
++#define PSVR2_USB_STATUS_RECOVER_ATTEMPTS 2
++
+ #define SLAM_POSE_CORRECTION {.orientation = {.x = 0, .y = 0, .z = sqrt(2) / 2, .w = sqrt(2) / 2}}
+ // clang-format on
+ 
+@@ -612,44 +615,171 @@ struct psvr2_interface_info interface_list[] = {
+     {.interface_no = PSVR2_CAMERA_INTERFACE, .altmode = 0, .name = "Camera"},
+     {.interface_no = PSVR2_LD_INTERFACE, .altmode = 0, .name = "LED Detector"},
+     {.interface_no = PSVR2_RP_INTERFACE, .altmode = 0, .name = "Relocalizer"},
+-    {.interface_no = PSVR2_VD_INTERFACE, .altmode = 0, .name = "VD"},
++	{.interface_no = PSVR2_VD_INTERFACE, .altmode = 0, .name = "VD"},
+ };
+ 
+ static bool
+-psvr2_usb_open(struct psvr2_hmd *hmd, struct xrt_prober_device *xpdev)
++psvr2_usb_set_interface_alt(struct psvr2_hmd *hmd, int intf_no, int altmode, const char *name)
+ {
+ 	int res;
++	int fallback_status_alt = 0;
++	int status_recover_attempts = PSVR2_USB_STATUS_RECOVER_ATTEMPTS;
+ 
+-	res = libusb_init(&hmd->ctx);
+-	if (res < 0) {
+-		PSVR2_ERROR(hmd, "Failed to init USB");
+-		return false;
++	res = libusb_set_interface_alt_setting(hmd->dev, intf_no, altmode);
++	if (res >= 0) {
++		return true;
+ 	}
+ 
+-	hmd->dev = libusb_open_device_with_vid_pid(hmd->ctx, xpdev->vendor_id, xpdev->product_id);
+-	if (hmd->dev == NULL) {
+-		PSVR2_ERROR(hmd, "Failed to open USB device");
++	PSVR2_WARN(hmd, "Failed to set USB %s interface alt %d (%s)", name, altmode, libusb_error_name(res));
++
++	if (intf_no != PSVR2_STATUS_INTERFACE) {
+ 		return false;
+ 	}
+ 
+-	for (size_t i = 0; i < sizeof(interface_list) / sizeof(interface_list[0]); i++) {
+-		int intf_no = interface_list[i].interface_no;
+-		int altmode = interface_list[i].altmode;
+-		const char *name = interface_list[i].name;
++	/* Status endpoint can be left in a bad state briefly after reconnect. Try hard
++	 * recovery paths before giving up so we can recover from real-world stale USB
++	 * states without manual unplug/replug loops.
++	 */
++	while (status_recover_attempts > 0) {
++		status_recover_attempts--;
+ 
+-		res = libusb_claim_interface(hmd->dev, intf_no);
++		res = libusb_clear_halt(hmd->dev, LIBUSB_ENDPOINT_IN | PSVR2_STATUS_ENDPOINT);
+ 		if (res < 0) {
+-			PSVR2_ERROR(hmd, "Failed to claim USB %s interface", name);
+-			return false;
++			PSVR2_WARN(hmd, "Failed to clear USB status endpoint halt (%s)", libusb_error_name(res));
+ 		}
+-		res = libusb_set_interface_alt_setting(hmd->dev, intf_no, altmode);
++
++		os_nanosleep(20 * U_TIME_1MS_IN_NS);
++
++		/* Re-anchor the alt setting by stepping through the default state first.
++		 * Some firmware revisions briefly reject ALT1 when the interface has
++		 * already been in a transient non-idle state after wake/reconnect.
++		 */
++		res = libusb_set_interface_alt_setting(hmd->dev, intf_no, fallback_status_alt);
+ 		if (res < 0) {
+-			PSVR2_ERROR(hmd, "Failed to set USB %s interface alt %d", name, altmode);
++			PSVR2_WARN(hmd, "Failed to set USB %s interface alt %d during recovery (%s)", name,
++			           fallback_status_alt, libusb_error_name(res));
++		}
++
++		os_nanosleep(20 * U_TIME_1MS_IN_NS);
++		res = libusb_set_interface_alt_setting(hmd->dev, intf_no, altmode);
++		if (res >= 0) {
++			return true;
++		}
++
++		if (status_recover_attempts <= 0) {
++			res = libusb_reset_device(hmd->dev);
++			if (res < 0) {
++				PSVR2_WARN(hmd, "Failed to reset USB device for status recovery (%s)", libusb_error_name(res));
++				break;
++			}
++			PSVR2_INFO(hmd, "USB status path recovery: device reset successful; reopening interfaces");
++			os_nanosleep(100 * U_TIME_1MS_IN_NS);
+ 			return false;
+ 		}
++
++		/* Fallback retry with another clear-halt + alternate-set attempt first. */
++		os_nanosleep(30 * U_TIME_1MS_IN_NS);
+ 	}
+ 
+-	return true;
++		PSVR2_ERROR(hmd, "Failed to set USB %s interface alt %d after recovery attempts (%s)", name, altmode,
++		            libusb_error_name(res));
++		return false;
++}
++
++static bool
++psvr2_usb_claim_interface_and_handle_kernel_driver(struct psvr2_hmd *hmd, int intf_no, const char *name)
++{
++	int res;
++	int retry = 1;
++
++resclaim:
++	res = libusb_claim_interface(hmd->dev, intf_no);
++	if (res >= 0) {
++		return true;
++	}
++
++	if (retry > 0 && (res == LIBUSB_ERROR_BUSY || res == LIBUSB_ERROR_NOT_FOUND)) {
++		int active = libusb_kernel_driver_active(hmd->dev, intf_no);
++		if (active > 0) {
++			res = libusb_detach_kernel_driver(hmd->dev, intf_no);
++			PSVR2_INFO(hmd, "Detaching USB %s kernel driver before claim (%s)", name,
++			           res < 0 ? libusb_error_name(res) : "ok");
++			if (res < 0 && res != LIBUSB_ERROR_NOT_FOUND && res != LIBUSB_ERROR_NOT_SUPPORTED) {
++				PSVR2_WARN(hmd, "Failed to detach USB %s kernel driver (%s)", name, libusb_error_name(res));
++			}
++		}
++		retry = 0;
++		goto resclaim;
++	}
++
++	PSVR2_ERROR(hmd, "Failed to claim USB %s interface (%s)", name, libusb_error_name(res));
++	return false;
++}
++
++static bool
++psvr2_usb_open(struct psvr2_hmd *hmd, struct xrt_prober_device *xpdev)
++{
++	int res;
++	for (int attempt = 1; attempt <= PSVR2_USB_OPEN_ATTEMPTS; attempt++) {
++		if (attempt > 1) {
++			PSVR2_WARN(hmd, "Retrying USB open (attempt %d/%d)", attempt, PSVR2_USB_OPEN_ATTEMPTS);
++			os_nanosleep((attempt > 2 ? 4 : 2) * U_TIME_1S_IN_NS / 10);
++		}
++
++		res = libusb_init(&hmd->ctx);
++		if (res < 0) {
++			PSVR2_ERROR(hmd, "Failed to init USB");
++			continue;
++		}
++
++		hmd->dev = libusb_open_device_with_vid_pid(hmd->ctx, xpdev->vendor_id, xpdev->product_id);
++		if (hmd->dev == NULL) {
++			PSVR2_ERROR(hmd, "Failed to open USB device");
++			libusb_exit(hmd->ctx);
++			hmd->ctx = NULL;
++			continue;
++		}
++		res = libusb_set_auto_detach_kernel_driver(hmd->dev, 1);
++		if (res < 0) {
++			PSVR2_WARN(hmd, "Failed to set libusb auto detach for USB device (%s)", libusb_error_name(res));
++		}
++
++		bool interfaces_ok = true;
++		for (size_t i = 0; i < sizeof(interface_list) / sizeof(interface_list[0]); i++) {
++			int intf_no = interface_list[i].interface_no;
++			int altmode = interface_list[i].altmode;
++			const char *name = interface_list[i].name;
++
++			if (!psvr2_usb_claim_interface_and_handle_kernel_driver(hmd, intf_no, name)) {
++				interfaces_ok = false;
++				break;
++			}
++			if (!psvr2_usb_set_interface_alt(hmd, intf_no, altmode, name)) {
++				interfaces_ok = false;
++				break;
++			}
++		}
++
++		if (interfaces_ok) {
++			return true;
++		}
++
++		if (hmd->dev != NULL) {
++			res = libusb_reset_device(hmd->dev);
++			if (res < 0) {
++				PSVR2_WARN(hmd, "Failed to reset USB device during USB-open cleanup (%s)",
++				           libusb_error_name(res));
++			}
++			libusb_close(hmd->dev);
++			hmd->dev = NULL;
++		}
++		if (hmd->ctx != NULL) {
++			libusb_exit(hmd->ctx);
++			hmd->ctx = NULL;
++		}
++	}
++
++	return false;
+ }
+ 
+ bool
