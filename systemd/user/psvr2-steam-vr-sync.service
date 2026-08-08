@@ -3,7 +3,7 @@ Description=Refresh WayVR Steam VR cache when Steam installs change
 
 [Service]
 Type=oneshot
-ExecStart=%h/.local/bin/psvr2-sync-steam-vr-games --discovery-only
+ExecStart=%h/.local/bin/psvr2-sync-steam-vr-games --force --no-restart-dashboard
 
 [Install]
 WantedBy=default.target

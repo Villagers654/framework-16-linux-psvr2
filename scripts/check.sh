@@ -27,6 +27,10 @@ mkdir -p "$pycache"
 PYTHONPYCACHEPREFIX="$pycache" python3 -m py_compile bin/psvr2-sync-steam-vr-games
 python3 -m json.tool config/room-setup-bindings-oculus-touch.json >/dev/null
 python3 -m json.tool config/envision-profile.json.in >/dev/null
+grep -Fq 'PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1' \
+  config/environment.d/60-psvr2-openxr.conf.in
+grep -Fq 'psvr2-sync-steam-vr-games --force --no-restart-dashboard' \
+  systemd/user/psvr2-steam-vr-sync.service
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
   "$work_dir/chaperone.toml"
 test "$(grep -c '^\[\[boundary\]\]$' "$work_dir/chaperone.toml")" = 4

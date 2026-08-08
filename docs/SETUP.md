@@ -110,8 +110,11 @@ perl -i -pe 's/^PSVR2_CHAPERONE_ENABLE=.*/PSVR2_CHAPERONE_ENABLE=0/' ~/.config/p
 Power on the headset and controllers. The USB monitor starts Monado and WayVR,
 which opens directly to installed Steam VR games. Select a cover and Play.
 
-The WayVR game cache is regenerated from Steam manifest changes whenever you install
-or remove titles, and again whenever Monado/WayVR launches. If you add a new
+The WayVR game cache and Monado launch metadata are regenerated from Steam
+manifest changes whenever you install or remove titles, and again whenever
+Monado/WayVR launches. A session-wide Steam environment also exports the active
+Monado runtime and xrizer bridge, so a newly installed title can start before
+Steam has reloaded its per-game launch options. If you add a new
 Steam title and it does not appear immediately, run:
 
 ```bash

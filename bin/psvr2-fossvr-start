@@ -35,14 +35,8 @@ assert_monado_binary_has_psvr2_builder() {
         echo "Monado binary missing or non-executable: $monado_binary" >&2
         return 1
     fi
-    if command -v objdump >/dev/null 2>&1; then
-        if (set +o pipefail; objdump -t "$monado_binary" 2>/dev/null | grep -q "t_builder_psvr2_create"); then
-            found_builder=1
-        fi
-    else
-        if (set +o pipefail; strings "$monado_binary" 2>/dev/null | grep -q "t_builder_psvr2_create"); then
-            found_builder=1
-        fi
+    if grep -aFq "t_builder_psvr2_create" "$monado_binary" 2>/dev/null; then
+        found_builder=1
     fi
     if [[ "$found_builder" != "1" ]]; then
         echo "Monado was built without the PSVR2 driver (XRT_BUILD_DRIVER_PSVR2 is OFF)." >&2
@@ -55,11 +49,7 @@ assert_monado_binary_has_psvr2_builder() {
 lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 exec 8>"$lock_dir/psvr2-fossvr-start.lock"
 flock 8
-"$helper_dir/psvr2-sync-steam-vr-games" --discovery-only || true
 systemctl --user start psvr2-autostart-monitor.service || true
-assert_monado_profile_supports_psvr2
-assert_monado_binary_has_psvr2_builder
-
 
 socket="$lock_dir/monado_comp_ipc"
 if systemctl --user is-active --quiet psvr2-fossvr.service \
@@ -69,6 +59,14 @@ if systemctl --user is-active --quiet psvr2-fossvr.service \
     echo "PSVR2 already ready: ${PSVR2_REFRESH_RATE} Hz / ${PSVR2_RENDER_SCALE}% + WayVR."
     exit 0
 fi
+
+# Steam's pressure-vessel container can provide an objdump that cannot inspect
+# the host-built Monado binary.  Only run build/profile validation when a new
+# runtime is actually needed, and use a byte-string check that works both on
+# the host and from Steam launch containers.
+"$helper_dir/psvr2-sync-steam-vr-games" --discovery-only || true
+assert_monado_profile_supports_psvr2
+assert_monado_binary_has_psvr2_builder
 
 rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 

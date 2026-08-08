@@ -8,6 +8,9 @@ source "$repo/lib/psvr2-common.sh"
 failed=0
 check() { if "$@"; then printf 'OK   %s\n' "$*"; else printf 'FAIL %s\n' "$*"; failed=1; fi; }
 check test -x "$HOME/.local/bin/psvr2-fossvr-start"
+check test -f "$HOME/.config/environment.d/60-psvr2-openxr.conf"
+check grep -Fq 'PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1' \
+  "$HOME/.config/environment.d/60-psvr2-openxr.conf"
 check test -x "$HOME/.local/bin/psvr2-controller-disconnect"
 check test -x "$HOME/.local/bin/psvr2-chaperone-sanity"
 check test -x "$HOME/.local/bin/psvr2-screenshot"

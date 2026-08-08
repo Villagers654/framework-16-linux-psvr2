@@ -89,6 +89,7 @@ uninstall_user() {
         rm -f -- "$HOME/.local/share/applications/$file"
     done
     rm -f -- "$HOME/.local/lib/psvr2-linux/common.sh" \
+        "$HOME/.config/environment.d/60-psvr2-openxr.conf" \
         "$HOME/.config/wireplumber/wireplumber.conf.d/51-psvr2-displayport-audio.conf"
 
     if $purge_data; then
@@ -137,6 +138,7 @@ if [[ "$mode" == user ]]; then
     [[ ${EUID} -ne 0 ]] || { echo "Run --user as your normal account." >&2; exit 1; }
     install -d -m 0755 "$HOME/.local/bin" "$HOME/.local/lib/psvr2-linux" \
         "$HOME/.config/psvr2-linux" "$HOME/.config/systemd/user" \
+        "$HOME/.config/environment.d" \
         "$HOME/.config/wireplumber/wireplumber.conf.d" \
         "$HOME/.local/share/applications" "$HOME/.local/share/psvr2-setup"
     while IFS= read -r -d '' script; do
@@ -169,6 +171,11 @@ if [[ "$mode" == user ]]; then
     # Apply LVRA's DisplayPort dropout fix only to the configured HMD sink.
     # shellcheck disable=SC1090
     source "$HOME/.config/psvr2-linux/settings.env"
+    sed -e "s|@MONADO_PREFIX@|$MONADO_PREFIX|g" \
+        -e "s|@ENVISION_PROFILE_ROOT@|$ENVISION_PROFILE_ROOT|g" \
+        "$repo_dir/config/environment.d/60-psvr2-openxr.conf.in" \
+        > "$HOME/.config/environment.d/60-psvr2-openxr.conf"
+    chmod 0644 "$HOME/.config/environment.d/60-psvr2-openxr.conf"
     audio_rule="$HOME/.config/wireplumber/wireplumber.conf.d/51-psvr2-displayport-audio.conf"
     if [[ -n "${VR_AUDIO_SINK:-}" ]]; then
         [[ "$VR_AUDIO_SINK" =~ ^[A-Za-z0-9_.:-]+$ ]] || {
