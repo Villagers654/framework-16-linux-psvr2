@@ -18,7 +18,7 @@ index a2f9c4d3..a4b47d78 100644
  
  		let id_label_time = state.get_widget_id("label_time")?;
 diff --git a/dash-frontend/src/util/steam_utils.rs b/dash-frontend/src/util/steam_utils.rs
-index 56ce0bb6..b1eec057 100644
+index 56ce0bb6..21f44028 100644
 --- a/dash-frontend/src/util/steam_utils.rs
 +++ b/dash-frontend/src/util/steam_utils.rs
 @@ -1,6 +1,7 @@
@@ -65,7 +65,7 @@ index 56ce0bb6..b1eec057 100644
 +			Some(rest) => {
 +				let home = std::env::var("HOME").unwrap_or_default();
 +				format!("{}{}", home, rest)
-+			};
++			}
 +			None => path.to_string(),
 +		};
 +		roots.push(expanded.replace("\\\\", "/").replace('\\', "/"));
@@ -286,14 +286,16 @@ index 56ce0bb6..b1eec057 100644
  		match sort_method {
  			GameSortMethod::None => {}
 diff --git a/dash-frontend/src/views/game_list.rs b/dash-frontend/src/views/game_list.rs
-index 1097f5f2..2b9a7dd9 100644
+index 1097f5f2..769b431c 100644
 --- a/dash-frontend/src/views/game_list.rs
 +++ b/dash-frontend/src/views/game_list.rs
-@@ -183,6 +183,12 @@ impl View {
+@@ -182,7 +182,13 @@ impl View {
+ 			.steam_utils
  			.list_installed_games(steam_utils::GameSortMethod::PlayDateDesc)
  		{
- 			Ok(manifests) => {
-+				let names: Vec<_> = manifests.iter().map(|manifest| &manifest.name).collect();
+-			Ok(manifests) => {
++				Ok(manifests) => {
++					let names: Vec<&str> = manifests.iter().map(|manifest| manifest.name.as_str()).collect();
 +				log::info!(
 +					"PSVR2 WayVR game listing loaded with {} apps: {}",
 +					manifests.len(),
@@ -302,6 +304,52 @@ index 1097f5f2..2b9a7dd9 100644
  				self.page_count = (manifests.len() as u32 + MAX_GAMES_PER_PAGE) / MAX_GAMES_PER_PAGE;
  				self.all_manifests = manifests;
  				self.tasks.push(Task::FillPage(0));
+diff --git a/wayvr/src/backend/input.rs b/wayvr/src/backend/input.rs
+index f0633645..5f60c597 100644
+--- a/wayvr/src/backend/input.rs
++++ b/wayvr/src/backend/input.rs
+@@ -1,7 +1,7 @@
+ use std::f32::consts::PI;
+ use std::process::{Child, Command};
+ use std::sync::Arc;
+-use std::time::Instant;
++use std::time::{Duration, Instant};
+ 
+ use glam::{Affine3A, Vec2, Vec3A, Vec3Swizzles};
+ 
+@@ -48,6 +48,16 @@ pub struct TrackedDevice {
+     pub role: TrackedDeviceRole,
+ }
+ 
++pub struct TrackedMonadoDevice {
++    pub index: u32,
++    pub role: TrackedDeviceRole,
++    pub soc: Option<f32>,
++    pub charging: bool,
++    pub name: String,
++    pub name_id: u32,
++    pub last_seen: Instant,
++}
++
+ #[repr(u8)]
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, IntegerId, AsRefStr)]
+ pub enum TrackedDeviceRole {
+@@ -63,6 +73,7 @@ pub struct InputState {
+     pub ipd: f32,
+     pub pointers: [Pointer; 2],
+     pub devices: Vec<TrackedDevice>,
++    pub device_cache: Vec<TrackedMonadoDevice>,
+     pub handsfree_state: PointerState,
+     processes: Vec<Child>,
+ }
+@@ -74,6 +85,7 @@ impl InputState {
+             ipd: 0.0,
+             pointers: [Pointer::new(0), Pointer::new(1)],
+             devices: Vec::new(),
++            device_cache: Vec::new(),
+             processes: Vec::new(),
+             handsfree_state: PointerState::default(),
+         }
 diff --git a/wayvr/src/backend/openxr/helpers.rs b/wayvr/src/backend/openxr/helpers.rs
 index d2c475eb..b727d6aa 100644
 --- a/wayvr/src/backend/openxr/helpers.rs
@@ -327,10 +375,262 @@ index d2c475eb..b727d6aa 100644
      if available_extensions.other.contains(&xr_extension) {
          enabled_extensions.other.push(xr_extension);
      }
+diff --git a/wayvr/src/backend/openxr/input.rs b/wayvr/src/backend/openxr/input.rs
+index 6e231bea..d17f7123 100644
+--- a/wayvr/src/backend/openxr/input.rs
++++ b/wayvr/src/backend/openxr/input.rs
+@@ -1,5 +1,6 @@
+ use std::{
+     array::from_fn,
++    collections::BTreeMap,
+     mem::transmute,
+     time::{Duration, Instant},
+ };
+@@ -16,6 +17,7 @@ use wlx_common::{
+ use crate::{
+     backend::input::{
+         Haptics, InputState, Pointer, PointerState, TrackedDevice, TrackedDeviceRole,
++        TrackedMonadoDevice,
+     },
+     state::{AppSession, AppState},
+ };
+@@ -257,24 +259,41 @@ impl OpenXrInputSource {
+ 
+     fn update_device_battery_status(
+         device: &mut mnd::Device,
+-        role: TrackedDeviceRole,
+-        input_state: &mut InputState,
+-    ) {
+-        if let Ok(status) = device.battery_status()
+-            && status.present
+-        {
+-            input_state.devices.push(TrackedDevice {
+-                soc: Some(status.charge),
+-                charging: status.charging,
+-                role,
+-            });
+-            log::debug!(
+-                "Device {} role {:#?}: {:.0}% (charging {})",
+-                device.index,
+-                role,
+-                status.charge * 100.0f32,
+-                status.charging
+-            );
++    ) -> (Option<f32>, bool, bool) {
++        match device.battery_status() {
++            Ok(status) => {
++                if status.present {
++                    (Some(status.charge), status.charging, true)
++                } else {
++                    (None, status.charging, true)
++                }
++            }
++            Err(err) => {
++                log::debug!(
++                    "Device {} battery query failed ({err}), keeping as input-only",
++                    device.index
++                );
++                (None, false, false)
++            }
++        }
++    }
++
++    fn infer_role_from_name(
++        name: &str,
++        fallback_name_id: u32,
++        fallback_role: TrackedDeviceRole,
++    ) -> TrackedDeviceRole {
++        let name = name.to_lowercase();
++        if name.contains("(l)") || name.contains(" left") || name.ends_with(" left") {
++            TrackedDeviceRole::LeftHand
++        } else if name.contains("(r)") || name.contains(" right") || name.ends_with(" right") {
++            TrackedDeviceRole::RightHand
++        } else if fallback_role != TrackedDeviceRole::None {
++            fallback_role
++        } else if (4..=8).contains(&fallback_name_id) {
++            TrackedDeviceRole::Tracker
++        } else {
++            TrackedDeviceRole::None
+         }
+     }
+ 
+@@ -283,7 +302,18 @@ impl OpenXrInputSource {
+             return false; // monado not available
+         };
+ 
+-        let old_len = app.input_state.devices.len();
++        const DEVICE_TTL: Duration = Duration::from_secs(120);
++        let now = Instant::now();
++        let old_signature = app
++            .input_state
++            .devices
++            .iter()
++            .map(|device| (device.role, device.soc, device.charging))
++            .collect::<Vec<_>>();
++
++        let previous_cache = std::mem::replace(&mut app.input_state.device_cache, Vec::new());
++        let mut observations = BTreeMap::<u32, TrackedMonadoDevice>::new();
++
+         app.input_state.devices.clear();
+ 
+         let roles = [
+@@ -303,28 +333,102 @@ impl OpenXrInputSource {
+         ];
+         let mut seen = Vec::<u32>::with_capacity(32);
+ 
+-        for (mnd_role, wlx_role) in roles {
++        for (mnd_role, fallback_role) in roles {
+             let device = monado.ipc.device_from_role(mnd_role);
+             if let Ok(mut device) = device
+                 && !seen.contains(&device.index)
+             {
+                 seen.push(device.index);
+-                Self::update_device_battery_status(&mut device, wlx_role, &mut app.input_state);
++                let role = Self::infer_role_from_name(&device.name, device.name_id, fallback_role);
++                let (soc, charging, had_battery) = Self::update_device_battery_status(&mut device);
++                observations.insert(
++                    device.index,
++                    TrackedMonadoDevice {
++                        index: device.index,
++                        role,
++                        soc: if had_battery { soc } else { None },
++                        charging,
++                        name: device.name.clone(),
++                        name_id: device.name_id,
++                        last_seen: now,
++                    },
++                );
+             }
+         }
+         if let Ok(devices) = monado.ipc.devices() {
+             for mut device in devices {
+                 if !seen.contains(&device.index) {
+-                    let role = if device.name_id >= 4 && device.name_id <= 8 {
+-                        TrackedDeviceRole::Tracker
+-                    } else {
+-                        TrackedDeviceRole::None
+-                    };
+-                    Self::update_device_battery_status(&mut device, role, &mut app.input_state);
++                    let role =
++                        Self::infer_role_from_name(&device.name, device.name_id, TrackedDeviceRole::None);
++                    if role == TrackedDeviceRole::None {
++                        continue;
++                    }
++
++                    let (soc, charging, had_battery) = Self::update_device_battery_status(&mut device);
++                    observations.insert(
++                        device.index,
++                        TrackedMonadoDevice {
++                            index: device.index,
++                            role,
++                            soc: if had_battery { soc } else { None },
++                            charging,
++                            name: device.name,
++                            name_id: device.name_id,
++                            last_seen: now,
++                        },
++                    );
+                 }
+             }
+         }
+ 
++        let mut cache = Vec::with_capacity(previous_cache.len().max(observations.len()) + 4);
++        for mut old in previous_cache {
++            if now.duration_since(old.last_seen) > DEVICE_TTL {
++                continue;
++            }
++
++            let next = observations.remove(&old.index);
++            if let Some(sample) = next {
++                let role = if sample.role == TrackedDeviceRole::None {
++                    old.role
++                } else {
++                    sample.role
++                };
++                old.role = role;
++                old.soc = sample.soc.or(old.soc);
++                old.charging = sample.charging || old.charging;
++                old.name = sample.name;
++                old.name_id = sample.name_id;
++                old.last_seen = now;
++            }
++
++            cache.push(old);
++        }
++
++        cache.extend(observations.into_values().map(|mut sample| {
++            sample.last_seen = now;
++            sample
++        }));
++
++        cache.sort_by(|a, b| {
++            a.last_seen
++                .cmp(&b.last_seen)
++                .then((a.role as u8).cmp(&(b.role as u8)))
++        });
++
++        app.input_state.device_cache = cache;
++        app.input_state.devices.extend(
++            app.input_state
++                .device_cache
++                .iter()
++                .filter(|device| !matches!(device.role, TrackedDeviceRole::None))
++                .map(|device| TrackedDevice {
++                    soc: device.soc,
++                    charging: device.charging,
++                    role: device.role,
++                }),
++        );
++
+         app.input_state.devices.sort_by(|a, b| {
+             u8::from(a.soc.is_none())
+                 .cmp(&u8::from(b.soc.is_none()))
+@@ -332,7 +436,31 @@ impl OpenXrInputSource {
+                 .then(a.soc.unwrap_or(999.).total_cmp(&b.soc.unwrap_or(999.)))
+         });
+ 
+-        old_len != app.input_state.devices.len()
++        let new_signature = app
++            .input_state
++            .devices
++            .iter()
++            .map(|device| (device.role, device.soc, device.charging))
++            .collect::<Vec<_>>();
++
++        if log::max_level() >= log::LevelFilter::Debug {
++            let hmd = app.input_state.devices.iter().filter(|d| d.role == TrackedDeviceRole::Hmd).count();
++            let left = app.input_state.devices.iter().filter(|d| d.role == TrackedDeviceRole::LeftHand).count();
++            let right = app.input_state.devices.iter().filter(|d| d.role == TrackedDeviceRole::RightHand).count();
++            let tracker = app.input_state.devices.iter().filter(|d| d.role == TrackedDeviceRole::Tracker).count();
++            let stale = app.input_state.device_cache.iter().filter(|d| now.duration_since(d.last_seen) > DEVICE_TTL).count();
++            log::debug!(
++                "Monado devices now visible: {} (hmd:{} left:{} right:{} trackers:{} stale:{})",
++                app.input_state.devices.len(),
++                hmd,
++                left,
++                right,
++                tracker,
++                stale
++            );
++        }
++
++        old_signature != new_signature
+     }
+ }
+ 
 diff --git a/wayvr/src/backend/openxr/mod.rs b/wayvr/src/backend/openxr/mod.rs
-index af703abc..f188762f 100644
+index af703abc..e2fa1e92 100644
 --- a/wayvr/src/backend/openxr/mod.rs
 +++ b/wayvr/src/backend/openxr/mod.rs
+@@ -16,7 +16,7 @@ use crate::{
+     Args, FRAME_COUNTER, RUNNING,
+     backend::{
+         BackendError, XrBackend,
+-        input::interact,
++        input::{interact, TrackedDeviceRole},
+         openxr::{helpers::try_apply_chroma_key, lines::LinePool, overlay::OpenXrOverlayData},
+         task::{OpenXrTask, OverlayTask, TaskType},
+     },
 @@ -41,6 +41,40 @@ mod skybox;
  mod swapchain;
  
@@ -372,15 +672,44 @@ index af703abc..f188762f 100644
  
  struct XrState {
      instance: xr::Instance,
-@@ -150,6 +184,7 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+@@ -150,6 +184,9 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
      let mut main_session_visible = false;
      let mut environment_blend_mode = modes[0];
      let mut last_frame_time = Instant::now();
 +    let mut screenshot_chord = ScreenshotChord::default();
++    let mut device_refresh_interval = Duration::from_millis(500);
++    let mut device_refresh_fails = 0u8;
  
      'main_loop: loop {
          let now = Instant::now();
-@@ -275,7 +310,21 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+@@ -224,7 +261,25 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+             if changed {
+                 overlays.devices_changed(&mut app)?;
+             }
+-            next_device_update = Instant::now() + Duration::from_secs(30);
++            let has_controllers = app
++                .input_state
++                .devices
++                .iter()
++                .any(|device| matches!(device.role, TrackedDeviceRole::LeftHand | TrackedDeviceRole::RightHand));
++
++            if has_controllers {
++                device_refresh_interval = Duration::from_secs(30);
++                device_refresh_fails = 0;
++            } else if device_refresh_fails < 60 {
++                // Keep checking quickly for a short window after startup or reconnects so
++                // paired Bluetooth controllers can be discovered without restarting Monado.
++                device_refresh_fails += 1;
++                device_refresh_interval = Duration::from_millis(500);
++            } else {
++                device_refresh_interval = Duration::from_secs(2);
++            }
++
++            next_device_update = Instant::now() + device_refresh_interval;
+         }
+ 
+         if !session_running {
+@@ -275,7 +330,21 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
              blocker.update(&mut app);
          }
  
@@ -403,7 +732,7 @@ index af703abc..f188762f 100644
              .input_state
              .pointers
              .iter()
-@@ -284,11 +333,12 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+@@ -284,11 +353,12 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
              overlays.show_hide(&mut app);
          }
  
@@ -421,7 +750,7 @@ index af703abc..f188762f 100644
          {
              app.tasks
                  .enqueue(TaskType::Overlay(OverlayTask::ToggleDashboard));
-@@ -534,6 +584,44 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
+@@ -534,6 +604,44 @@ pub fn openxr_run(args: &Args) -> Result<(), BackendError> {
      Ok(())
  }
  
@@ -520,3 +849,69 @@ index 155cfb88..aa871c7d 100644
    // Index controller
    {
      profile: "/interaction_profiles/valve/index_controller",
+diff --git a/wlx-common/src/openxr_controller_profiles.rs b/wlx-common/src/openxr_controller_profiles.rs
+index fa49046a..39a5f005 100644
+--- a/wlx-common/src/openxr_controller_profiles.rs
++++ b/wlx-common/src/openxr_controller_profiles.rs
+@@ -3,6 +3,7 @@ use crate::openxr_bindings_schema::{
+ };
+ 
+ pub const OPENXR_INPUT_PROFILES: &[&XrControllerProfile] = &[
++	&PSVR2_SENSE_CONTROLLER_PROFILE,
+ 	&OCULUS_TOUCH_CONTROLLER_PROFILE,
+ 	&VALVE_INDEX_CONTROLLER_PROFILE,
+ 	&VALVE_FRAME_CONTROLLER_VALVE_PROFILE,
+@@ -13,6 +14,53 @@ pub const OPENXR_INPUT_PROFILES: &[&XrControllerProfile] = &[
+ 	&KHR_GENERIC_CONTROLLER_PROFILE,
+ ];
+ 
++pub const PSVR2_SENSE_CONTROLLER_PROFILE: XrControllerProfile = XrControllerProfile {
++	display_name: "PlayStation VR2 Sense Controller",
++	extension: Some("XR_MNDX_psvr2_interaction"),
++	profile_id: "/interaction_profiles/mndx/pssense_controller_mndx",
++	user_paths: &[
++		XrControllerUserPath {
++			hand: XrInputSide::Left,
++			paths: PSVR2_CONTROLLER_USER_PATHS,
++		},
++		XrControllerUserPath {
++			hand: XrInputSide::Right,
++			paths: PSVR2_CONTROLLER_USER_PATHS,
++		},
++	],
++};
++
++const PSVR2_CONTROLLER_USER_PATHS: &[XrInputSubpath] = &[
++	XrInputSubpath {
++		kind: XrInputSubpathKind::Aim,
++		components: &[XrInputComponent::Pose],
++	},
++	XrInputSubpath {
++		kind: XrInputSubpathKind::System,
++		components: &[XrInputComponent::Click],
++	},
++	XrInputSubpath {
++		kind: XrInputSubpathKind::Trigger,
++		components: &[XrInputComponent::Value, XrInputComponent::Touch],
++	},
++	XrInputSubpath {
++		kind: XrInputSubpathKind::Squeeze,
++		components: &[XrInputComponent::Click, XrInputComponent::Value],
++	},
++	XrInputSubpath {
++		kind: XrInputSubpathKind::Thumbstick,
++		components: &[
++			XrInputComponent::X,
++			XrInputComponent::Y,
++			XrInputComponent::Click,
++		],
++	},
++	XrInputSubpath {
++		kind: XrInputSubpathKind::Haptic,
++		components: &[],
++	},
++];
++
+ pub const VALVE_INDEX_CONTROLLER_PROFILE: XrControllerProfile = XrControllerProfile {
+ 	display_name: "Valve Index Controller",
+ 	extension: None,

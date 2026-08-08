@@ -147,9 +147,9 @@ controller pairing, read [docs/SETUP.md](docs/SETUP.md).
   `psvr2-spectator toggle` to change that choice persistently. The command
   cleanly restarts an active VR session; add `--no-restart` to defer it. GNOME's
   app grid also contains **Toggle PSVR2 Spectator View**.
-- Turn controllers on afterward: the monitor detects them and, if both are connected by
-  Bluetooth and exposed as HID, it refreshes controller role mapping to keep
-  Monado accurate in WayVR/Room Setup.
+- Turn controllers on before or after headset launch: WayVR starts without
+  blocking. Controllers can appear live over Bluetooth + HID; no Monado restart
+  is required just to expose roles.
 - Configure once with **PSVR2 Chaperone Setup** (or `psvr2-chaperone configure`) to
   render warning walls and fade geometry around your room boundary.
 - Warning geometry is visual-only and does not hard-block movement.
@@ -165,9 +165,9 @@ controller pairing, read [docs/SETUP.md](docs/SETUP.md).
   dashboard while keeping Monado and the calibrated tracking origin alive.
 - Disconnect the headset's USB, DisplayPort, adapter power, or headset cable:
   the active VR title, WayVR, Monado, and Ignition helper close automatically,
-  and the previous desktop audio output is restored. The headset’s Bluetooth-linked
-  Sense controllers are also auto-disconnected so they do not remain paired to
-  VR while the session is down. Steam itself stays open.
+  and the previous desktop audio output is restored. Steam itself stays open.  
+  Controllers stay paired on Bluetooth (unless you set `PSVR2_DISCONNECT_CONTROLLERS=1`
+  in `settings.env`), so reusing them after headset reconnection is immediate.
 - Stop VR: launch **Stop PSVR2 (Monado)** from GNOME or run `psvr2-fossvr-stop`.
 - Manual start: launch **PSVR2 (Monado + WayVR)** or run `psvr2-fossvr-start`.
 

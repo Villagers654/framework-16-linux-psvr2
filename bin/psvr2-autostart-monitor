@@ -9,8 +9,6 @@ link_check_interval=${PSVR2_LINK_STABILITY_INTERVAL_SECONDS:-1}
 startup_retry_base=${PSVR2_STARTUP_RETRY_BASE_SECONDS:-12}
 startup_retry_max=${PSVR2_STARTUP_RETRY_MAX_SECONDS:-120}
 startup_retry_attempts=${PSVR2_STARTUP_RETRY_ATTEMPTS:-3}
-controller_role_repair_backoff_seconds=${PSVR2_CONTROLLER_ROLE_REPAIR_BACKOFF_SECONDS:-18}
-controller_role_repair_attempt_limit=${PSVR2_CONTROLLER_ROLE_REPAIR_ATTEMPTS:-3}
 openvr_failure_streak_threshold=${PSVR2_OPENVR_FAILURE_STREAK_THRESHOLD:-2}
 openvr_recovery_cooldown=${PSVR2_OPENVR_FAILURE_RECOVERY_SECONDS:-90}
 runtime_failure_streak_threshold=${PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD:-$openvr_failure_streak_threshold}
@@ -25,11 +23,12 @@ connection_state_file="${PSVR2_CONNECTION_STATE_FILE:-}"
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 start_helper="$helper_dir/psvr2-fossvr-start"
 stop_helper="$helper_dir/psvr2-fossvr-stop"
+bluetoothctl_bin=$(command -v bluetoothctl 2>/dev/null || true)
 next_retry=0
 runtime_failure_streak=0
 required_controller_count="${PSVR2_REQUIRED_CONTROLLER_COUNT:-2}"
-last_controller_role_repair=0
-controller_role_repair_attempts=0
+wayvr_role_retry_interval="${PSVR2_WAYVR_ROLE_RETRY_SECONDS:-8}"
+wayvr_input_retry_interval="${PSVR2_WAYVR_INPUT_RETRY_SECONDS:-8}"
 
 load_runtime_failure_state() {
     if [[ -r "$runtime_failure_state_file" ]]; then
@@ -164,6 +163,41 @@ controller_count() {
     printf '%s\n' "$count"
 }
 
+bluetooth_controller_count() {
+    local count=0 address name line
+    if [[ -z "$bluetoothctl_bin" ]]; then
+        printf '%s\n' 0
+        return
+    fi
+    while IFS= read -r line; do
+        address=$(awk '{print $2; exit}' <<<"$line")
+        name=$(awk '{$1=$2=""; sub(/^  /, "", $0); print $0}' <<<"$line")
+        [[ -n "$address" ]] || continue
+        [[ -n "$name" ]] || continue
+
+        if [[ "$name" == *"PlayStation VR2 Sense Controller"* ]] \
+            || [[ "$name" == *"PS VR2 Sense Controller"* ]] \
+            || [[ "$name" == *"Sense Controller (L)"* ]] \
+            || [[ "$name" == *"Sense Controller (R)"* ]]; then
+            if "$bluetoothctl_bin" info "$address" 2>/dev/null | grep -q 'Connected: yes'; then
+                count=$((count + 1))
+            fi
+        fi
+    done < <("$bluetoothctl_bin" devices 2>/dev/null)
+    printf '%s\n' "$count"
+}
+
+connected_controller_count() {
+    local count_hid count_bt
+    count_hid=$(controller_count)
+    count_bt=$(bluetooth_controller_count)
+    if (( count_bt > count_hid )); then
+        printf '%s\n' "$count_bt"
+    else
+        printf '%s\n' "$count_hid"
+    fi
+}
+
 extract_controller_role() {
     local device_side=$1 logs=$2 line value
     line=$(grep -m 1 -E "^[[:space:]]*${device_side}:" <<<"$logs" | tail -n 1 || true)
@@ -191,51 +225,134 @@ extract_controller_role() {
     return 0
 }
 
-controller_roles_are_assigned() {
-    local pid=$1 logs left right
-    logs=$(journalctl --user -u psvr2-fossvr.service "_PID=$pid" -n 220 --no-pager 2>/dev/null -o cat || true)
-    left=$(extract_controller_role left "$logs" || true)
-    right=$(extract_controller_role right "$logs" || true)
-    if [[ -n "$left" && -n "$right" ]]; then
+monado_controller_roles_ready() {
+    local log_lines="${PSVR2_MONADO_CONTROLLER_LOG_LINES:-240}"
+    local monado_pid logs left_line right_line
+
+    if (( required_controller_count == 0 )); then
         return 0
     fi
-    return 1
+
+    monado_pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value 2>/dev/null || echo 0)
+    if [[ -z "${monado_pid}" || "${monado_pid}" == "0" ]]; then
+        return 1
+    fi
+
+    logs=$(journalctl --user -u psvr2-fossvr.service "_PID=${monado_pid}" -o cat -n "$log_lines" --no-pager 2>/dev/null || true)
+    if [[ -z "$logs" ]]; then
+        return 1
+    fi
+
+    left_line=$(grep -m 1 -E "^[[:space:]]*left:" <<<"$logs" | tail -n 1 || true)
+    right_line=$(grep -m 1 -E "^[[:space:]]*right:" <<<"$logs" | tail -n 1 || true)
+    if [[ -z "$left_line" || -z "$right_line" ]]; then
+        return 1
+    fi
+
+    left_line=${left_line// /}
+    right_line=${right_line// /}
+    [[ "$left_line" == *"<none>"* || "$left_line" == *"(<none>)"* ]] && return 1
+    [[ "$right_line" == *"<none>"* || "$right_line" == *"(<none>)"* ]] && return 1
+    return 0
+}
+
+wayvr_controller_inputs_ready() {
+    local wayvr_pid logs selection_block left_line right_line line
+    local wayvr_log_lines="${PSVR2_WAYVR_CONTROLLER_LOG_LINES:-220}"
+
+    wayvr_pid=$(systemctl --user show psvr2-fossvr-wayvr.service -p MainPID --value 2>/dev/null || echo 0)
+    if [[ -z "$wayvr_pid" || "$wayvr_pid" == "0" ]]; then
+        return 1
+    fi
+
+    logs=$(journalctl --user -u psvr2-fossvr-wayvr.service "_PID=$wayvr_pid" -o cat -n "$wayvr_log_lines" --no-pager 2>/dev/null || true)
+    if [[ -z "$logs" ]]; then
+        return 1
+    fi
+
+    # WayVR prints a deterministic "Selected devices" block at startup:
+    #   Head: ...
+    #   Left: ...
+    #   Right: ...
+    # We care about the latest block, which appears at the bottom of the log.
+    selection_block=$(awk '
+        /LOG in xrGetSystem: Selected devices/ { in_sel = 1; next }
+        in_sel && $0 ~ /Hand-Tracking Left \(unobstructed\):/ { in_sel = 0 }
+        in_sel { print }
+        in_sel && /Right:/ { right = $0 }
+        in_sel && /Left:/ { left = $0 }
+        END {
+            if (left != "") print "left=" left;
+            if (right != "") print "right=" right;
+        }
+    ' <<<"$logs")
+
+    left_line=$(awk -F'left=' '/^left=/{print $2; exit}' <<<"$selection_block")
+    right_line=$(awk -F'right=' '/^right=/{print $2; exit}' <<<"$selection_block")
+
+    if [[ -z "$left_line" || -z "$right_line" ]]; then
+        return 1
+    fi
+
+    left_line=${left_line// /}
+    right_line=${right_line// /}
+    [[ "$left_line" == "<none>"* || "$left_line" == *"(<none>)"* ]] && return 1
+    [[ "$right_line" == "<none>"* || "$right_line" == *"(<none>)"* ]] && return 1
+    return 0
 }
 
 ensure_monado_controller_roles() {
-    local controllers=$1 now=$2 pid
+    local controllers=$1 now=$2
+    local last_restart_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-last-wayvr-role-retry"
+    local last_input_restart_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-last-wayvr-input-retry"
+    local now_epoch
+
+    # keep this check lightweight: no monado restart is required just to expose
+    # roles; startup and device discovery are handled by the normal pipeline.
     if (( controllers < required_controller_count )); then
         return 0
     fi
-    if (( now - last_controller_role_repair < controller_role_repair_backoff_seconds )); then
-        return 0
-    fi
-    if (( controller_role_repair_attempts >= controller_role_repair_attempt_limit )); then
-        return 0
-    fi
-    if ! is_runtime_active; then
+
+    # Recent changes in WayVR/Monado log formatting can omit role lines in Monado logs
+    # even when controller devices are exposed to OpenXR. In that case, use WayVR's
+    # selected-devices report (left/right) as the authoritative signal.
+    if wayvr_controller_inputs_ready; then
         return 0
     fi
 
-    pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value 2>/dev/null || true)
-    if [[ -z "$pid" || "$pid" == "0" || "$pid" == "n/a" ]]; then
+    if monado_controller_roles_ready; then
         return 0
     fi
 
-    if controller_roles_are_assigned "$pid"; then
-        controller_role_repair_attempts=0
-        return 0
+    now_epoch=$(date +%s)
+    if [[ -n "$now" ]]; then
+        now_epoch=$now
+    fi
+    if [[ -r "$last_restart_file" ]]; then
+        last_restart=$(cat "$last_restart_file" 2>/dev/null || echo 0)
+    else
+        last_restart=0
+    fi
+    if (( now_epoch - last_restart < wayvr_role_retry_interval )); then
+        return 1
     fi
 
-    if (( controller_role_repair_attempts >= controller_role_repair_attempt_limit )); then
-        return 0
+    if [[ -r "$last_input_restart_file" ]]; then
+        last_restart=$(cat "$last_input_restart_file" 2>/dev/null || echo 0)
+    else
+        last_restart=0
     fi
-    controller_role_repair_attempts=$((controller_role_repair_attempts + 1))
-    last_controller_role_repair=$now
-    echo "PSVR2 controllers are present but XR roles are not assigned; restarting Monado to refresh roles (${controller_role_repair_attempts}/${controller_role_repair_attempt_limit})."
-    PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
-    sleep 1
-    start_runtime || true
+    if (( now_epoch - last_restart >= wayvr_input_retry_interval )); then
+        echo "$now_epoch" > "$last_input_restart_file"
+        echo "PSVR2 detected controllers absent in WayVR selected-device input; restarting WayVR only"
+        systemctl --user restart psvr2-fossvr-wayvr.service || true
+        return 1
+    fi
+
+    echo "$now_epoch" > "$last_restart_file"
+    echo "PSVR2 detected controllers without assigned roles; restarting WayVR only"
+    systemctl --user restart psvr2-fossvr-wayvr.service || true
+    return 1
 }
 
 is_runtime_active() {
@@ -373,7 +490,7 @@ if is_runtime_active; then
 else
     previous=disconnected
 fi
-previous_controllers=$(controller_count)
+previous_controllers=$(connected_controller_count)
 
 while true; do
     if headset_connected; then current=connected; else current=disconnected; fi
@@ -383,9 +500,7 @@ while true; do
             if headset_state_stable 1 "$((link_stability_checks * link_check_interval))" "$link_stability_checks"; then
                 start_runtime || true
                 previous=$current
-                previous_controllers=$(controller_count)
-                last_controller_role_repair=0
-                controller_role_repair_attempts=0
+                previous_controllers=$(connected_controller_count)
             else
                 next_retry=$((SECONDS + startup_retry_base))
                 # Keep previous state until we actually see a sustained link.
@@ -404,9 +519,7 @@ while true; do
                 clear_runtime_state
                 next_retry=0
                 previous=$current
-                previous_controllers=$(controller_count)
-                last_controller_role_repair=0
-                controller_role_repair_attempts=0
+                previous_controllers=$(connected_controller_count)
             fi
             # transient disconnects are ignored to avoid restart loops while
             # Sony's USB/DisplayPort links re-negotiate.
@@ -415,7 +528,7 @@ while true; do
             fi
         fi
     elif [[ "$current" == connected ]]; then
-        controllers=$(controller_count)
+        controllers=$(connected_controller_count)
         now=$(date +%s)
         ensure_monado_controller_roles "$controllers" "$now" || true
         previous_controllers=$controllers

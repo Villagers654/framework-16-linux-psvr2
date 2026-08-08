@@ -1,5 +1,6 @@
 #!/usr/bin/bash
 set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh" >/dev/null 2>&1 || true
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 runtime_preflight="$helper_dir/psvr2-runtime-preflight"
 audio_helper="$helper_dir/psvr2-audio"
@@ -23,7 +24,7 @@ if [[ "$state" != inactive && "$state" != failed ]]; then
     systemctl --user kill --kill-whom=all --signal=SIGKILL psvr2-fossvr.service || true
 fi
 systemctl --user stop psvr2-fossvr.service || true
-if [[ "${PSVR2_DISCONNECT_CONTROLLERS:-1}" == "1" ]] && \
+if [[ "${PSVR2_DISCONNECT_CONTROLLERS:-0}" == "1" ]] && \
     [[ "${PSVR2_AUTOMATED_STOP:-0}" != "1" ]] && [[ -x "$controller_disconnect" ]]; then
     "$controller_disconnect" || true
 fi

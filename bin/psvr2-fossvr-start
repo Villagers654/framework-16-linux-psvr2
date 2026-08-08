@@ -6,6 +6,9 @@ helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 runtime_preflight="$helper_dir/psvr2-runtime-preflight"
 chaperone_sanity="$helper_dir/psvr2-chaperone-sanity"
 audio_helper="$helper_dir/psvr2-audio"
+required_controller_count="${PSVR2_REQUIRED_CONTROLLER_COUNT:-2}"
+require_controller_roles="${PSVR2_REQUIRE_CONTROLLER_ROLES:-0}"
+controller_role_wait_attempts="${PSVR2_CONTROLLER_ROLE_WAIT_ATTEMPTS:-40}"
 for helper in "$runtime_preflight" "$chaperone_sanity" "$audio_helper"; do
     if [[ ! -x "$helper" ]]; then
         echo "Required PSVR2 helper is missing or not executable: $helper" >&2
@@ -172,9 +175,32 @@ extract_controller_role() {
     return 0
 }
 
+controller_count() {
+    local count=0 product file
+    for product in 0E45 0E46; do
+        for file in /sys/class/hidraw/hidraw*/device/uevent; do
+            [[ -r "$file" ]] || continue
+            if grep -Fq "HID_ID=0005:0000054C:0000${product}" "$file"; then
+                count=$((count + 1))
+                break
+            fi
+        done
+    done
+    printf '%s\n' "$count"
+}
+
 await_controller_roles() {
-    local pid=$1 attempt=0 ready=0 left_role right_role role_logs
-    for _ in $(seq 1 40); do
+    local pid=$1 attempt=0 ready=0 left_role right_role role_logs controllers
+    if [[ "$require_controller_roles" != "1" ]]; then
+        return 0
+    fi
+    controllers=$(controller_count)
+    if (( controllers < required_controller_count )); then
+        echo "PSVR2 has $controllers controller HID device(s), need ${required_controller_count}; proceeding without role enforcement."
+        return 0
+    fi
+
+    for _ in $(seq 1 "$controller_role_wait_attempts"); do
         if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
             return 1
         fi

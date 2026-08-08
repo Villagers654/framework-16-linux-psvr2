@@ -26,6 +26,8 @@ check bash -c 'if command -v objdump >/dev/null 2>&1; then objdump -t "$1" 2>/de
     "$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
 check bash -c 'configured=$(jq -r ".user_profiles[] | select(.uuid==\"psvr2-toolkit-monado\") | .xrservice_cmake_flags.XRT_BUILD_DRIVER_PSVR2 // \"\" " "$1" 2>/dev/null || true); [[ "$configured" == "ON" ]]' _ \
     "$HOME/.config/envision/envision.json"
+check bash -c 'configured=$(jq -r ".user_profiles[] | select(.uuid==\"psvr2-toolkit-monado\") | .xrservice_cmake_flags.XRT_BUILD_DRIVER_PSSENSE // \"\" " "$1" 2>/dev/null || true); [[ "$configured" == "ON" ]]' _ \
+    "$HOME/.config/envision/envision.json"
 check test -f "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/release/libxrizer.so"
 check grep -aFq 'Raw tracking space removes PSVR2 chaperone' "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/release/libxrizer.so"
 check grep -Fq 'XRIZER_FORCE_RAW_TRACKING_SPACE=1' "$HOME/.local/bin/psvr2-room-setup"
