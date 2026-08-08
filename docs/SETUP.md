@@ -35,6 +35,7 @@ Build and install the patched dashboard:
 
 ```bash
 ./scripts/build-wayvr.sh
+./scripts/build-xr-chaperone.sh
 sudo ./install.sh --system --framework16-rx7700s
 ./scripts/verify.sh
 ```

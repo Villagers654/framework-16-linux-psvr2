@@ -9,10 +9,8 @@ link_check_interval=${PSVR2_LINK_STABILITY_INTERVAL_SECONDS:-1}
 startup_retry_base=${PSVR2_STARTUP_RETRY_BASE_SECONDS:-12}
 startup_retry_max=${PSVR2_STARTUP_RETRY_MAX_SECONDS:-120}
 startup_retry_attempts=${PSVR2_STARTUP_RETRY_ATTEMPTS:-3}
-openvr_failure_streak_threshold=${PSVR2_OPENVR_FAILURE_STREAK_THRESHOLD:-2}
-openvr_recovery_cooldown=${PSVR2_OPENVR_FAILURE_RECOVERY_SECONDS:-90}
-runtime_failure_streak_threshold=${PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD:-$openvr_failure_streak_threshold}
-runtime_recovery_cooldown=${PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS:-$openvr_recovery_cooldown}
+runtime_failure_streak_threshold=${PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD:-2}
+runtime_recovery_cooldown=${PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS:-90}
 runtime_retry_cooldown=${PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS:-$runtime_recovery_cooldown}
 required_usb_interfaces=${PSVR2_USB_INTERFACE_MINIMUM:-11}
 suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
@@ -26,9 +24,6 @@ stop_helper="$helper_dir/psvr2-fossvr-stop"
 bluetoothctl_bin=$(command -v bluetoothctl 2>/dev/null || true)
 next_retry=0
 runtime_failure_streak=0
-required_controller_count="${PSVR2_REQUIRED_CONTROLLER_COUNT:-2}"
-wayvr_role_retry_interval="${PSVR2_WAYVR_ROLE_RETRY_SECONDS:-8}"
-wayvr_input_retry_interval="${PSVR2_WAYVR_INPUT_RETRY_SECONDS:-8}"
 
 load_runtime_failure_state() {
     if [[ -r "$runtime_failure_state_file" ]]; then
@@ -196,163 +191,6 @@ connected_controller_count() {
     else
         printf '%s\n' "$count_hid"
     fi
-}
-
-extract_controller_role() {
-    local device_side=$1 logs=$2 line value
-    line=$(grep -m 1 -E "^[[:space:]]*${device_side}:" <<<"$logs" | tail -n 1 || true)
-    if [[ -z "$line" ]]; then
-        return 1
-    fi
-    value=$(sed -E "s/^[[:space:]]*${device_side}:[[:space:]]*//; s/[[:space:]]+$//" <<<"$line")
-    value=${value// /}
-    if [[ -z "$value" ]]; then
-        return 1
-    fi
-    if [[ "$value" == -1 ]]; then
-        return 1
-    fi
-    if [[ "$value" == "<none>" || "$value" == "<none/>" || "$value" == "none" ]]; then
-        return 1
-    fi
-    if [[ "$value" == "<none>"* ]]; then
-        return 1
-    fi
-    if [[ "$value" == *"(<none>)" ]]; then
-        return 1
-    fi
-    printf '%s\n' "$value"
-    return 0
-}
-
-monado_controller_roles_ready() {
-    local log_lines="${PSVR2_MONADO_CONTROLLER_LOG_LINES:-240}"
-    local monado_pid logs left_line right_line
-
-    if (( required_controller_count == 0 )); then
-        return 0
-    fi
-
-    monado_pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value 2>/dev/null || echo 0)
-    if [[ -z "${monado_pid}" || "${monado_pid}" == "0" ]]; then
-        return 1
-    fi
-
-    logs=$(journalctl --user -u psvr2-fossvr.service "_PID=${monado_pid}" -o cat -n "$log_lines" --no-pager 2>/dev/null || true)
-    if [[ -z "$logs" ]]; then
-        return 1
-    fi
-
-    left_line=$(grep -m 1 -E "^[[:space:]]*left:" <<<"$logs" | tail -n 1 || true)
-    right_line=$(grep -m 1 -E "^[[:space:]]*right:" <<<"$logs" | tail -n 1 || true)
-    if [[ -z "$left_line" || -z "$right_line" ]]; then
-        return 1
-    fi
-
-    left_line=${left_line// /}
-    right_line=${right_line// /}
-    [[ "$left_line" == *"<none>"* || "$left_line" == *"(<none>)"* ]] && return 1
-    [[ "$right_line" == *"<none>"* || "$right_line" == *"(<none>)"* ]] && return 1
-    return 0
-}
-
-wayvr_controller_inputs_ready() {
-    local wayvr_pid logs selection_block left_line right_line line
-    local wayvr_log_lines="${PSVR2_WAYVR_CONTROLLER_LOG_LINES:-220}"
-
-    wayvr_pid=$(systemctl --user show psvr2-fossvr-wayvr.service -p MainPID --value 2>/dev/null || echo 0)
-    if [[ -z "$wayvr_pid" || "$wayvr_pid" == "0" ]]; then
-        return 1
-    fi
-
-    logs=$(journalctl --user -u psvr2-fossvr-wayvr.service "_PID=$wayvr_pid" -o cat -n "$wayvr_log_lines" --no-pager 2>/dev/null || true)
-    if [[ -z "$logs" ]]; then
-        return 1
-    fi
-
-    # WayVR prints a deterministic "Selected devices" block at startup:
-    #   Head: ...
-    #   Left: ...
-    #   Right: ...
-    # We care about the latest block, which appears at the bottom of the log.
-    selection_block=$(awk '
-        /LOG in xrGetSystem: Selected devices/ { in_sel = 1; next }
-        in_sel && $0 ~ /Hand-Tracking Left \(unobstructed\):/ { in_sel = 0 }
-        in_sel { print }
-        in_sel && /Right:/ { right = $0 }
-        in_sel && /Left:/ { left = $0 }
-        END {
-            if (left != "") print "left=" left;
-            if (right != "") print "right=" right;
-        }
-    ' <<<"$logs")
-
-    left_line=$(awk -F'left=' '/^left=/{print $2; exit}' <<<"$selection_block")
-    right_line=$(awk -F'right=' '/^right=/{print $2; exit}' <<<"$selection_block")
-
-    if [[ -z "$left_line" || -z "$right_line" ]]; then
-        return 1
-    fi
-
-    left_line=${left_line// /}
-    right_line=${right_line// /}
-    [[ "$left_line" == "<none>"* || "$left_line" == *"(<none>)"* ]] && return 1
-    [[ "$right_line" == "<none>"* || "$right_line" == *"(<none>)"* ]] && return 1
-    return 0
-}
-
-ensure_monado_controller_roles() {
-    local controllers=$1 now=$2
-    local last_restart_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-last-wayvr-role-retry"
-    local last_input_restart_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-last-wayvr-input-retry"
-    local now_epoch
-
-    # keep this check lightweight: no monado restart is required just to expose
-    # roles; startup and device discovery are handled by the normal pipeline.
-    if (( controllers < required_controller_count )); then
-        return 0
-    fi
-
-    # Recent changes in WayVR/Monado log formatting can omit role lines in Monado logs
-    # even when controller devices are exposed to OpenXR. In that case, use WayVR's
-    # selected-devices report (left/right) as the authoritative signal.
-    if wayvr_controller_inputs_ready; then
-        return 0
-    fi
-
-    if monado_controller_roles_ready; then
-        return 0
-    fi
-
-    now_epoch=$(date +%s)
-    if [[ -n "$now" ]]; then
-        now_epoch=$now
-    fi
-    if [[ -r "$last_restart_file" ]]; then
-        last_restart=$(cat "$last_restart_file" 2>/dev/null || echo 0)
-    else
-        last_restart=0
-    fi
-    if (( now_epoch - last_restart < wayvr_role_retry_interval )); then
-        return 1
-    fi
-
-    if [[ -r "$last_input_restart_file" ]]; then
-        last_restart=$(cat "$last_input_restart_file" 2>/dev/null || echo 0)
-    else
-        last_restart=0
-    fi
-    if (( now_epoch - last_restart >= wayvr_input_retry_interval )); then
-        echo "$now_epoch" > "$last_input_restart_file"
-        echo "PSVR2 detected controllers absent in WayVR selected-device input; restarting WayVR only"
-        systemctl --user restart psvr2-fossvr-wayvr.service || true
-        return 1
-    fi
-
-    echo "$now_epoch" > "$last_restart_file"
-    echo "PSVR2 detected controllers without assigned roles; restarting WayVR only"
-    systemctl --user restart psvr2-fossvr-wayvr.service || true
-    return 1
 }
 
 is_runtime_active() {
@@ -529,8 +367,12 @@ while true; do
         fi
     elif [[ "$current" == connected ]]; then
         controllers=$(connected_controller_count)
-        now=$(date +%s)
-        ensure_monado_controller_roles "$controllers" "$now" || true
+        if (( controllers > previous_controllers )) \
+            && is_runtime_active \
+            && systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then
+            echo "PSVR2 Sense controller connected; restarting WayVR to refresh OpenXR inputs"
+            systemctl --user restart psvr2-fossvr-wayvr.service || true
+        fi
         previous_controllers=$controllers
         if is_runtime_active && ! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then
             echo "PSVR2 WayVR dashboard is not running while runtime is active; restarting it"

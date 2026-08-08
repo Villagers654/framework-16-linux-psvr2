@@ -15,8 +15,6 @@
   and dashboard.
 - [xr-chaperone](https://github.com/FrostyCoolSlug/xr-chaperone) — optional
   OpenXR visual boundary overlay (warning wall and fade).
-- [SteamVR Linux Fixes](https://github.com/BnuuySolutions/SteamVRLinuxFixes) —
-  Vulkan compatibility layer for the optional Valve compositor path.
 - [xr-hardware](https://github.com/CollaboraLtd/udev-hmd) — canonical udev IDs.
 
 This repository's original scripts and documentation are MIT licensed. Patches

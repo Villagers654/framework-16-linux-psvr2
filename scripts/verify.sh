@@ -16,7 +16,7 @@ check bash -c 'test "$(PSVR2_SCREENSHOT_WINDOW_LIST="$1" "$HOME/.local/bin/psvr2
     '0x1 0 1 0 0 3840 2400 game.Game host VR Game'
 check test -x "$HOME/.local/bin/psvr2-spectator"
 if [[ "$PSVR2_CHAPERONE_ENABLE" == 1 ]]; then
-  check test -x "${PSVR2_CHAPERONE_BINARY:-$HOME/.local/share/psvr2-setup/xr-chaperone/xr-chaperone.AppImage}"
+  check test -x "${PSVR2_CHAPERONE_BINARY:-$HOME/.local/share/psvr2-setup/xr-chaperone/xr-chaperone}"
 fi
 check test -x "$HOME/.local/share/psvr2-setup/wayvr/wayvr"
 check grep -aFq 'PSVR2 screenshot chord pressed' "$HOME/.local/share/psvr2-setup/wayvr/wayvr"

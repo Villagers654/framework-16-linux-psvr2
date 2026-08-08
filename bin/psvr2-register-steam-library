@@ -1,8 +1,0 @@
-#!/usr/bin/bash
-set -u
-source "$HOME/.local/lib/psvr2-linux/common.sh"
-bin="$STEAM_ROOT/steamapps/common/SteamVR/bin/linux64"
-manifest="$STEAM_ROOT/config/steamapps.vrmanifest"
-if [[ -x "$bin/vrcmd" && -f "$manifest" ]]; then
-    LD_LIBRARY_PATH="$bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$bin/vrcmd" --appmanifest "$manifest"
-fi

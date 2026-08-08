@@ -1,6 +1,0 @@
-[Unit]
-Description=Restore PSVR2 Linux compatibility hooks after updates
-
-[Service]
-Type=oneshot
-ExecStart=%h/.local/bin/psvr2-steamvr-bridge

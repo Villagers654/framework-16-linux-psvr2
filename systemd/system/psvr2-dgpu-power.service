@@ -3,7 +3,18 @@ Description=Keep an AMD dGPU awake while PSVR2 is connected
 
 [Service]
 Type=simple
+Environment=PSVR2_DGPU_PCI_ADDRESS=@DGPU_PCI_ADDRESS@
 ExecStart=/usr/local/libexec/psvr2-dgpu-power hold
 ExecStop=/usr/local/libexec/psvr2-dgpu-power auto
 Restart=on-failure
 RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native

@@ -5,12 +5,17 @@ state_file=/run/psvr2-dgpu-power.devices
 
 discover_devices() {
     : > "$state_file"
-    for card in /sys/class/drm/card[0-9]; do
-      device=$(readlink -f "$card/device")
-      [[ "$(cat "$device/vendor" 2>/dev/null || true)" == "0x1002" ]] || continue
-      [[ "$(cat "$device/boot_vga" 2>/dev/null || true)" == "0" ]] || continue
-      printf '%s\n' "$device" >> "$state_file"
-    done
+    local address=${PSVR2_DGPU_PCI_ADDRESS:-}
+    [[ "$address" =~ ^0000:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}[.][0-7]$ ]] || {
+      echo "PSVR2_DGPU_PCI_ADDRESS is missing or invalid" >&2
+      return 1
+    }
+    local device="/sys/bus/pci/devices/$address"
+    [[ -d "$device" && "$(cat "$device/vendor" 2>/dev/null || true)" == "0x1002" ]] || {
+      echo "Configured AMD dGPU is unavailable: $address" >&2
+      return 1
+    }
+    printf '%s\n' "$device" > "$state_file"
 }
 
 apply_vr_profile() {

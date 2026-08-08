@@ -1,9 +1,0 @@
-[Unit]
-Description=Maintain PSVR2 SteamVR and WayVR startup integration
-
-[Service]
-Type=oneshot
-ExecStart=%h/.local/bin/psvr2-steamvr-bridge
-
-[Install]
-WantedBy=default.target

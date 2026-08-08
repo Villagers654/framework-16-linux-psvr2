@@ -6,9 +6,6 @@ helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 runtime_preflight="$helper_dir/psvr2-runtime-preflight"
 chaperone_sanity="$helper_dir/psvr2-chaperone-sanity"
 audio_helper="$helper_dir/psvr2-audio"
-required_controller_count="${PSVR2_REQUIRED_CONTROLLER_COUNT:-2}"
-require_controller_roles="${PSVR2_REQUIRE_CONTROLLER_ROLES:-0}"
-controller_role_wait_attempts="${PSVR2_CONTROLLER_ROLE_WAIT_ATTEMPTS:-40}"
 for helper in "$runtime_preflight" "$chaperone_sanity" "$audio_helper"; do
     if [[ ! -x "$helper" ]]; then
         echo "Required PSVR2 helper is missing or not executable: $helper" >&2
@@ -75,16 +72,6 @@ fi
 
 rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 
-if [[ "${PSVR2_ENABLE_STEAMVR_BRIDGE:-0}" == "1" ]]; then
-    "$STEAM_COMMAND" -shutdown-vr >/dev/null 2>&1 || true
-    for _ in $(seq 1 50); do
-        pgrep -f '/SteamVR/bin/linux64/(vrserver|vrcompositor)' >/dev/null || break
-        sleep 0.1
-    done
-    pkill -TERM -f '/SteamVR/bin/linux64/vrcompositor' 2>/dev/null || true
-    pkill -TERM -f '/SteamVR/bin/linux64/vrserver' 2>/dev/null || true
-fi
-
 "$chaperone_sanity" || true
 
 systemctl --user stop monado.socket monado.service 2>/dev/null || true
@@ -146,84 +133,6 @@ is_monado_failed() {
     return 1
 }
 
-extract_controller_role() {
-    local device_side=$1 logs=$2 line value
-    line=$(grep -m 1 -E "^[[:space:]]*${device_side}:" <<<"$logs" | tail -n 1 || true)
-    if [[ -z "$line" ]]; then
-        return 1
-    fi
-    value=$(sed -E "s/^[[:space:]]*${device_side}:[[:space:]]*//; s/[[:space:]]+$//" <<<"$line")
-    value=${value// /}
-    # Real roles come through as a device name or descriptor.
-    # A literal "<none> (<none>)" means role slot is unassigned.
-    if [[ -z "$value" ]]; then
-        return 1
-    fi
-    if [[ "$value" == -1 ]]; then
-        return 1
-    fi
-    if [[ "$value" == "<none>" || "$value" == "<none/>" || "$value" == "none" ]]; then
-        return 1
-    fi
-    if [[ "$value" == "<none>"* ]]; then
-        return 1
-    fi
-    if [[ "$value" == *"(<none>)" ]]; then
-        return 1
-    fi
-    printf '%s\n' "$value"
-    return 0
-}
-
-controller_count() {
-    local count=0 product file
-    for product in 0E45 0E46; do
-        for file in /sys/class/hidraw/hidraw*/device/uevent; do
-            [[ -r "$file" ]] || continue
-            if grep -Fq "HID_ID=0005:0000054C:0000${product}" "$file"; then
-                count=$((count + 1))
-                break
-            fi
-        done
-    done
-    printf '%s\n' "$count"
-}
-
-await_controller_roles() {
-    local pid=$1 attempt=0 ready=0 left_role right_role role_logs controllers
-    if [[ "$require_controller_roles" != "1" ]]; then
-        return 0
-    fi
-    controllers=$(controller_count)
-    if (( controllers < required_controller_count )); then
-        echo "PSVR2 has $controllers controller HID device(s), need ${required_controller_count}; proceeding without role enforcement."
-        return 0
-    fi
-
-    for _ in $(seq 1 "$controller_role_wait_attempts"); do
-        if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
-            return 1
-        fi
-
-        role_logs=$(journalctl --user -u psvr2-fossvr.service "_PID=$pid" -o cat --no-pager 2>/dev/null || true)
-        left_role=$(extract_controller_role left "$role_logs" || true)
-        right_role=$(extract_controller_role right "$role_logs" || true)
-
-        if [[ -n "$left_role" && -n "$right_role" ]]; then
-            ready=1
-            break
-        fi
-
-        attempt=$((attempt + 1))
-        sleep 0.5
-    done
-
-    if (( ready == 1 )); then
-        return 0
-    fi
-    return 1
-}
-
 # A live IPC socket only proves monado-service started. The proprietary
 # PSVR2 driver can remain alive after USB initialization fails, leaving a
 # headless runtime that systemd incorrectly reports as healthy. Do not probe
@@ -252,10 +161,6 @@ if (( ! runtime_healthy )); then
     journalctl --user -u psvr2-fossvr.service -n 80 --no-pager >&2
     systemctl --user stop psvr2-fossvr.service || true
     exit 1
-fi
-
-if ! await_controller_roles "$service_pid"; then
-    echo "Monado started but controller roles were not assigned yet; WayVR will start and the monitor will retry role assignment."
 fi
 
 systemctl --user start psvr2-fossvr-wayvr.service

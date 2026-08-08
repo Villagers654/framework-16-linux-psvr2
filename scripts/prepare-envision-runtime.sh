@@ -2,41 +2,62 @@
 set -euo pipefail
 
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-root="$HOME/.local/share/envision/psvr2-toolkit-monado"
-config="$HOME/.config/envision/envision.json"
+# shellcheck source=../lib/psvr2-common.sh
+source "$repo/lib/psvr2-common.sh"
+for command in git jq mktemp sed; do
+  command -v "$command" >/dev/null 2>&1 || {
+    echo "Missing required command: $command" >&2
+    exit 1
+  }
+done
+root="$ENVISION_PROFILE_ROOT"
+config="${XDG_CONFIG_HOME:-$HOME/.config}/envision/envision.json"
 mkdir -p "$root" "$(dirname "$config")"
 
 if [[ ! -d "$root/xrservice/.git" ]]; then
   git clone --branch psvr2-linux-steam-lh https://gitlab.freedesktop.org/Supremium/monado "$root/xrservice"
 fi
 git -C "$root/xrservice" fetch origin psvr2-linux-steam-lh
-git -C "$root/xrservice" checkout 8bd01e7edec8028f65c7bff925195f0454d4bc9f
-git -C "$root/xrservice" apply --check "$repo/patches/monado-psvr2-sense.patch" 2>/dev/null && \
-  git -C "$root/xrservice" apply "$repo/patches/monado-psvr2-sense.patch" || true
-git -C "$root/xrservice" apply --check "$repo/patches/monado-psvr2-usb-recovery.patch" 2>/dev/null && \
-  git -C "$root/xrservice" apply "$repo/patches/monado-psvr2-usb-recovery.patch" || true
-git -C "$root/xrservice" apply --check "$repo/patches/monado-spectator-mirror.patch" 2>/dev/null && \
-  git -C "$root/xrservice" apply "$repo/patches/monado-spectator-mirror.patch" || true
+git -C "$root/xrservice" checkout --detach 8bd01e7edec8028f65c7bff925195f0454d4bc9f
+apply_patch_once() {
+  local tree=$1 patch=$2
+  if git -C "$tree" apply --check "$patch"; then
+    git -C "$tree" apply "$patch"
+  elif git -C "$tree" apply --reverse --check "$patch"; then
+    echo "Already applied: $(basename "$patch")"
+  else
+    echo "Patch does not apply cleanly: $patch" >&2
+    exit 1
+  fi
+}
+apply_patch_once "$root/xrservice" "$repo/patches/monado-psvr2-sense.patch"
+apply_patch_once "$root/xrservice" "$repo/patches/monado-psvr2-usb-recovery.patch"
+apply_patch_once "$root/xrservice" "$repo/patches/monado-spectator-mirror.patch"
+git -C "$root/xrservice" diff --check
 
 if [[ ! -d "$root/xrizer/.git" ]]; then
   git clone --recurse-submodules https://github.com/Supreeeme/xrizer "$root/xrizer"
 fi
 git -C "$root/xrizer" fetch origin
-git -C "$root/xrizer" checkout 6c3e45f4c18b014a7aba87282ee0677306315052
+git -C "$root/xrizer" checkout --detach 6c3e45f4c18b014a7aba87282ee0677306315052
+git -C "$root/xrizer" submodule update --init --recursive
 for patch in \
   "$repo/patches/xrizer-linux-room-setup.patch" \
   "$repo/patches/xrizer-chaperone-bounds.patch" \
   "$repo/patches/xrizer-linux-room-setup-tracking-guard.patch" \
   "$repo/patches/xrizer-room-setup-proximity.patch"; do
-  git -C "$root/xrizer" apply --check "$patch" 2>/dev/null && git -C "$root/xrizer" apply "$patch" || true
+  apply_patch_once "$root/xrizer" "$patch"
 done
+git -C "$root/xrizer" diff --check
 
 dri_prime=""
-source "$HOME/.config/psvr2-linux/settings.env"
 [[ -z "$DGPU_PCI_ADDRESS" ]] || dri_prime="pci-${DGPU_PCI_ADDRESS//:/_}"
 dri_prime=${dri_prime//./_}
 profile=$(mktemp)
-sed -e "s|@HOME@|$HOME|g" -e "s|@DRI_PRIME@|$dri_prime|g" "$repo/config/envision-profile.json.in" > "$profile"
+escaped_home=${HOME//\\/\\\\}; escaped_home=${escaped_home//&/\\&}; escaped_home=${escaped_home//|/\\|}
+escaped_dri=${dri_prime//\\/\\\\}; escaped_dri=${escaped_dri//&/\\&}; escaped_dri=${escaped_dri//|/\\|}
+sed -e "s|@HOME@|$escaped_home|g" -e "s|@DRI_PRIME@|$escaped_dri|g" \
+  "$repo/config/envision-profile.json.in" > "$profile"
 
 if [[ -f "$config" ]]; then cp -n "$config" "$config.before-psvr2" || true; else echo '{"user_profiles":[]}' > "$config"; fi
 tmp=$(mktemp)

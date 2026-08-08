@@ -23,11 +23,15 @@ if CONFIG.exists():
 STATE = HOME / ".local/share/psvr2-setup/steam-vr-apps.json"
 WRAPPER = str(HOME / ".local/bin/psvr2-fossvr-run")
 FORCE_VR_IDS = ""
+MANAGE_LAUNCH_OPTIONS = True
 if CONFIG.exists():
     text = CONFIG.read_text()
     match = re.search(r'^PSVR2_FORCE_VR_IDS="?([^"\n]+)', text, re.M)
     if match:
         FORCE_VR_IDS = match.group(1)
+    match = re.search(r'^PSVR2_MANAGE_STEAM_LAUNCH_OPTIONS="?([01])', text, re.M)
+    if match:
+        MANAGE_LAUNCH_OPTIONS = match.group(1) == "1"
 
 # Hybrid games known to require an explicit VR mode. Add new entries here.
 VR_FLAGS = {
@@ -41,6 +45,13 @@ FORCE_PROTON = {
     "341800": "proton_experimental",       # Keep Talking and Nobody Explodes
 }
 KNOWN = {appid: True for appid in set(VR_FLAGS) | set(FORCE_PROTON)}
+NON_GAME_IDS = {
+    "250820",   # SteamVR
+    "2580190",  # PlayStation VR2 App
+    "1493710",  # Proton Experimental
+    "1070560", "1391110", "1628350", "4183110",  # Steam Linux runtimes
+    "228980", "1826330", "2805730",  # redistributables and compatibility tools
+}
 
 KTANE_SETTINGS = (
     STEAM / "steamapps/compatdata/341800/pfx/drive_c/users/steamuser/AppData/LocalLow"
@@ -199,6 +210,11 @@ def main() -> int:
     parser.add_argument("--discovery-only", action="store_true", help="Only refresh the WayVR cache.")
     parser.add_argument("--force", action="store_true", help="Allow launch-option patching while Steam is running.")
     parser.add_argument(
+        "--refresh-metadata",
+        action="store_true",
+        help="Re-query Steam metadata for cached non-VR applications.",
+    )
+    parser.add_argument(
         "--no-restart-dashboard",
         action="store_true",
         help="Skip restarting WayVR after refresh (for systems where restart is managed externally).",
@@ -208,15 +224,19 @@ def main() -> int:
     apps = installed_apps()
     cache = dict(KNOWN)
     try:
-        cache.update(json.loads(STATE.read_text()))
+        saved = json.loads(STATE.read_text())
+        if isinstance(saved, dict):
+            cache.update({str(key): value for key, value in saved.items() if isinstance(value, bool)})
     except (FileNotFoundError, json.JSONDecodeError):
         pass
 
-    # Re-check every installed entry that isn't already known-good to recover from
-    # one-off store query failures and prevent stale false entries from blocking
-    # newly-installed titles.
+    # Query new manifests once. Re-query cached negatives only when explicitly
+    # requested; normal startup must not depend on dozens of network requests.
     for appid in apps:
-        if cache.get(appid, False):
+        if appid in NON_GAME_IDS:
+            cache[appid] = False
+            continue
+        if appid in cache and not args.refresh_metadata:
             continue
 
         try:
@@ -241,25 +261,40 @@ def main() -> int:
     # comma-separated values.
     extra_ids = os.environ.get("PSVR2_FORCE_VR_IDS", FORCE_VR_IDS)
     for appid in (value.strip() for value in extra_ids.split(",") if value.strip()):
-        cache[appid] = True
+        if appid.isdecimal():
+            cache[appid] = True
+        else:
+            print(f"PSVR2: ignoring invalid forced Steam app ID: {appid!r}", file=sys.stderr)
 
     # Persist a deterministic cache for WayVR so startup behavior does not depend
     # on how long Steam has had to settle after installation or launch.
     STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps(cache, indent=2, sort_keys=True) + "\n")
+    payload = json.dumps(cache, indent=2, sort_keys=True) + "\n"
+    with tempfile.NamedTemporaryFile("w", dir=STATE.parent, delete=False) as output:
+        output.write(payload)
+        temporary = Path(output.name)
+    temporary.chmod(0o644)
+    os.replace(temporary, STATE)
 
     print(f"PSVR2: synced {len(cache)} steam ids, {sum(1 for v in cache.values() if v)} vr-enabled")
 
-    patch_launch_options = (not args.discovery_only) and (args.force or not steam_running())
+    patch_launch_options = (
+        MANAGE_LAUNCH_OPTIONS
+        and not args.discovery_only
+        and (args.force or not steam_running())
+    )
     vr = {appid for appid in apps if cache.get(appid) is True}
     if patch_launch_options:
         for config in (STEAM / "userdata").glob("[0-9]*/config/localconfig.vdf"):
             patch_localconfig(config, vr)
         steam_config = STEAM / "config/config.vdf"
         if steam_config.exists(): patch_compat_tools(steam_config)
+    elif args.discovery_only:
+        print("PSVR2: discovery-only mode; launch options were not changed.")
+    elif not MANAGE_LAUNCH_OPTIONS:
+        print("PSVR2: launch-option management is disabled in settings.env.")
     else:
-        if args.discovery_only:
-            print("PSVR2: Steam is running; skipping launch-option patching (cache refresh only).")
+        print("PSVR2: Steam is running; launch options were not changed (use --force to override).")
 
     if not args.no_restart_dashboard:
         restart_wayvr_dashboard()

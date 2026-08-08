@@ -31,7 +31,7 @@ fi
 binary="$PSVR2_CHAPERONE_BINARY"
 if [[ ! -f "$binary" ]]; then
     echo "PSVR2 chaperone binary not found: $binary" >&2
-    echo "Run ./scripts/fetch-community-tools.sh to download xr-chaperone." >&2
+    echo "Run ./scripts/build-xr-chaperone.sh to build xr-chaperone." >&2
     exit 1
 fi
 if [[ ! -x "$binary" ]]; then

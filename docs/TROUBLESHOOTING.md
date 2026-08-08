@@ -9,9 +9,15 @@ systemctl --user status psvr2-fossvr.service psvr2-fossvr-wayvr.service
 journalctl --user -u psvr2-fossvr.service -n 150 --no-pager
 ```
 
-Confirm both controller HID devices exist with `psvr2-controller-preflight`.
-If BlueZ says connected but no HID device exists, fill the optional controller
-MACs in the private settings file and rerun the preflight.
+Confirm both controller HID devices exist:
+
+```bash
+grep -HlE 'HID_ID=0005:0000054C:00000E4(5|6)' \
+  /sys/class/hidraw/hidraw*/device/uevent
+```
+
+If BlueZ says connected but neither HID device exists, disconnect and reconnect
+the controllers in GNOME Bluetooth settings, then restart WayVR.
 
 If Monado logs still show:
 

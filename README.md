@@ -65,7 +65,7 @@ before running the quick start.
 | Host services | systemd user services, udev, BlueZ, PipeWire, and WirePlumber | Required for automatic startup, device permissions, Sense pairing, and PSVR2 audio routing. |
 | Script utilities | Bash, Git, cURL, UnZip, `jq`, Python 3, `usbutils`, `pciutils`, and `iproute` | These supply `git`, `curl`, `unzip`, `jq`, `python3`, `lsusb`, `lspci`, and `ss`. Internet access to GitHub, GitLab, Steam, and Homebrew is required during setup. |
 | WayVR build | Rust/Cargo, CMake, Ninja, Meson, pkg-config, shaderc, ALSA, PipeWire, xkbcommon, D-Bus, and OpenSSL development files | The tested Bazzite setup supplies this self-contained toolchain through Homebrew; equivalent distribution development packages also work. |
-| xr-chaperone | `zip` + `AppImage` runtime | `scripts/fetch-community-tools.sh` fetches this AppImage and places it in `$PSVR2_SETUP_ROOT/xr-chaperone`. |
+| xr-chaperone | Rust/Cargo plus the WayVR build toolchain | Built from a pinned source commit; no mutable nightly binary is executed. |
 | Screenshot shortcut | `wmctrl`, ImageMagick, and `notify-send` | Optional. Only required for the PS-button + trigger screenshot chord. |
 
 The headset and Sony PC adapter must have PC-compatible firmware. If the
@@ -113,6 +113,7 @@ cd framework-16-linux-psvr2
 ./scripts/install-room-setup-binding.sh
 ./scripts/prepare-envision-runtime.sh
 ./scripts/build-wayvr.sh
+./scripts/build-xr-chaperone.sh
 sudo ./install.sh --system --framework16-rx7700s
 ```
 
@@ -178,7 +179,7 @@ the manual launcher when you want VR again.
 ## Repository layout
 
 - `bin/` – portable versions of every helper used by the working setup
-- `systemd/user/` – Monado, WayVR, maintenance, and connection-monitor user units
+- `systemd/user/` – Monado, WayVR, Steam-library sync, and connection-monitor units
 - `systemd/system/` – optional AMD dGPU power guard
 - `udev/` – PSVR2 permissions and conditional AMD power hooks
 - `patches/` – exact Monado, xrizer, and WayVR source changes
@@ -194,10 +195,10 @@ the manual launcher when you want VR again.
 | PSVR2 Toolkit | `v1.0.0-experimental-1` (`PSVR2TK-win64-Ignition.zip`) |
 | Ignition | `v1.0.0` |
 | PSVR2Toolkit.UnitySetup | `v1.1.0` |
-| SteamVRLinuxFixes | `v0.1.4` |
 | Supremium Monado branch | `psvr2-linux-steam-lh` at `8bd01e7edec8028f65c7bff925195f0454d4bc9f` |
 | xrizer | `6c3e45f4c18b014a7aba87282ee0677306315052` |
 | WayVR | `d93b74cc8aa01ea17d72d46ce016e47286409f92` (26.7.1) |
+| xr-chaperone | `a0351bd00f208e9f7c7917d413de2accbf9208eb` |
 
 See [docs/UPSTREAM.md](docs/UPSTREAM.md) for links, licenses, and what each
 project contributes.
@@ -213,5 +214,6 @@ This repository intentionally does **not** contain:
 - Bluetooth MAC addresses
 - eye, room, or lens calibration data
 
-The download script fetches public release assets from their upstream project
-pages. Source patches are provided so the custom binaries can be rebuilt.
+The download script accepts only HTTPS and verifies pinned SHA-256 digests before
+extracting release assets. Monado, xrizer, WayVR, and xr-chaperone are checked
+out by immutable commit and built locally.

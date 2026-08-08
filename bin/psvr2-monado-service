@@ -2,15 +2,10 @@
 set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
 
-# Keep SteamVR Lighthouse base-station support disabled unless explicitly enabled.
 # Keep PSVR2 Sense discovery enabled by default because it carries controller input.
 psvr2_sense="${PSVR2_LOAD_PSVR2_SENSE:-${LH_LOAD_PSVR2:-1}}"
-export STEAMVR_LH_ENABLE="${PSVR2_ENABLE_STEAMVR_LH:-0}"
-if [[ "${PSVR2_ENABLE_STEAMVR_LH:-0}" == "1" ]]; then
-    export LH_LOAD_LIGHTHOUSE=true
-else
-    export LH_LOAD_LIGHTHOUSE=false
-fi
+export STEAMVR_LH_ENABLE=0
+export LH_LOAD_LIGHTHOUSE=false
 case "$psvr2_sense" in
     0|false|FALSE|off|OFF|disabled|DISABLED|no|NO) export LH_LOAD_PSVR2=false ;;
     *) export LH_LOAD_PSVR2=true ;;
@@ -29,7 +24,7 @@ else
     export XRT_DEBUG_GUI=0 XRT_CURATED_GUI=0
 fi
 export XRT_COMPOSITOR_FORCE_VK_DISPLAY=0
-export XRT_COMP_FRAME_LAG_LOG_AS_LEVEL=debug
+export XRT_COMP_FRAME_LAG_LOG_AS_LEVEL=warn
 export U_PACING_APP_USE_MIN_FRAME_PERIOD=1
 # Reserve enough of each 8.34 ms frame for AMD timewarp/reprojection. Monado's
 # 4 ms default can miss the 120 Hz deadline under otherwise-manageable load.
