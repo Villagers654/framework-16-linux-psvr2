@@ -229,4 +229,8 @@ fi
 systemctl daemon-reload
 udevadm control --reload-rules
 udevadm trigger --subsystem-match=usb
-echo "System integration installed. Reconnect or power-cycle PSVR2."
+# Existing devices receive a generic change event above. Replay the add event
+# only for PSVR2 so the dGPU guard starts without requiring a cable reconnect.
+udevadm trigger --action=add --subsystem-match=usb \
+    --attr-match=idVendor=054c --attr-match=idProduct=0cde
+echo "System integration installed and connected PSVR2 devices retriggered."
