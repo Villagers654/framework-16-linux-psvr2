@@ -138,6 +138,22 @@ $EDITOR ~/.config/psvr2-linux/settings.env
 For the exact from-scratch sequence, including Steam app preparation and
 controller pairing, read [docs/SETUP.md](docs/SETUP.md).
 
+## Clean reset
+
+The installer owns an explicit removal path, including stale files from older
+repository versions:
+
+```bash
+./install.sh --uninstall-user --purge-data
+sudo ./install.sh --uninstall-system
+```
+
+This removes the integration, generated source/build trees, prefixes, caches,
+configuration, udev rules, and the Framework dGPU service. It deliberately does
+not remove Steam, SteamVR, Proton, the PlayStation VR2 App, or any games; manage
+those application depots through Steam when a full application redownload is
+required.
+
 ## Everyday use
 
 - Power on/connect PSVR2: the runtime and game launcher start automatically.

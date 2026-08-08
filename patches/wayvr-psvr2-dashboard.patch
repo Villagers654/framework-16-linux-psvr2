@@ -308,15 +308,6 @@ diff --git a/wayvr/src/backend/input.rs b/wayvr/src/backend/input.rs
 index f0633645..5f60c597 100644
 --- a/wayvr/src/backend/input.rs
 +++ b/wayvr/src/backend/input.rs
-@@ -1,7 +1,7 @@
- use std::f32::consts::PI;
- use std::process::{Child, Command};
- use std::sync::Arc;
--use std::time::Instant;
-+use std::time::{Duration, Instant};
- 
- use glam::{Affine3A, Vec2, Vec3A, Vec3Swizzles};
- 
 @@ -48,6 +48,16 @@ pub struct TrackedDevice {
      pub role: TrackedDeviceRole,
  }
@@ -389,7 +380,8 @@ index 6e231bea..d17f7123 100644
 @@ -16,6 +17,7 @@ use wlx_common::{
  use crate::{
      backend::input::{
-         Haptics, InputState, Pointer, PointerState, TrackedDevice, TrackedDeviceRole,
+-        Haptics, InputState, Pointer, PointerState, TrackedDevice, TrackedDeviceRole,
++        Haptics, Pointer, PointerState, TrackedDevice, TrackedDeviceRole,
 +        TrackedMonadoDevice,
      },
      state::{AppSession, AppState},
@@ -677,7 +669,7 @@ index af703abc..e2fa1e92 100644
      let mut environment_blend_mode = modes[0];
      let mut last_frame_time = Instant::now();
 +    let mut screenshot_chord = ScreenshotChord::default();
-+    let mut device_refresh_interval = Duration::from_millis(500);
++    let mut device_refresh_interval;
 +    let mut device_refresh_fails = 0u8;
  
      'main_loop: loop {

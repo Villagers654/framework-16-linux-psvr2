@@ -24,6 +24,9 @@ pycache=$(mktemp -d)
 PYTHONPYCACHEPREFIX="$pycache" python3 -m py_compile bin/psvr2-sync-steam-vr-games
 python3 -m json.tool config/room-setup-bindings-oculus-touch.json >/dev/null
 python3 -m json.tool config/envision-profile.json.in >/dev/null
+for patch in patches/*.patch; do
+  git apply --stat "$patch" >/dev/null
+done
 
 if command -v systemd-analyze >/dev/null 2>&1; then
   systemd-analyze verify systemd/user/* systemd/system/psvr2-dgpu-power.service
