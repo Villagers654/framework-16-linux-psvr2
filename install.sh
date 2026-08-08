@@ -198,7 +198,12 @@ fi
 [[ ${EUID} -eq 0 ]] || { echo "Run --system with sudo." >&2; exit 1; }
 install -m 0644 "$repo_dir/udev/70-psvr2.rules" /etc/udev/rules.d/70-psvr2.rules
 if $framework; then
-    mapfile -t dgpus < <(lspci -Dn | awk '$3 == "1002:7480" { sub(/:$/, "", $1); print "0000:" $1 }')
+    mapfile -t dgpus < <(lspci -Dn | awk '$3 == "1002:7480" {
+        address=$1
+        sub(/:$/, "", address)
+        if (address !~ /^[[:xdigit:]]{4}:/) address="0000:" address
+        print address
+    }')
     [[ ${#dgpus[@]} -eq 1 ]] || {
         echo "Expected exactly one Framework RX 7700S (1002:7480), found ${#dgpus[@]}." >&2
         exit 1
