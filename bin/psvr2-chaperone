@@ -46,6 +46,24 @@ fi
 export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
 export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
 
+# xr-chaperone loads the unversioned OpenXR loader name at runtime. Immutable
+# hosts may have only the versioned runtime library until their staged
+# openxr-devel deployment is booted, while the tested build toolchain already
+# provides the loader through Homebrew.
+openxr_loader_cache=$(ldconfig -p 2>/dev/null || true)
+if ! grep -Eq '^[[:space:]]*libopenxr_loader[.]so[[:space:]]' <<<"$openxr_loader_cache"; then
+    brew_command=$(command -v brew 2>/dev/null || true)
+    if [[ -z "$brew_command" && -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+        brew_command=/home/linuxbrew/.linuxbrew/bin/brew
+    fi
+    if [[ -n "$brew_command" ]]; then
+        openxr_prefix=$("$brew_command" --prefix openxr 2>/dev/null || true)
+        if [[ -f "$openxr_prefix/lib/libopenxr_loader.so" ]]; then
+            export LD_LIBRARY_PATH="$openxr_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        fi
+    fi
+fi
+
 read -r -a extra_args <<<"${PSVR2_CHAPERONE_SERVICE_ARGS:-}"
 
 case "$mode" in

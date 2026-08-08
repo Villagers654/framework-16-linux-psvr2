@@ -66,6 +66,7 @@ if [[ "$tracking_ready" != true ]]; then
 fi
 
 roomsetup_env=()
+roomsetup_env+=("PSVR2_ROOM_SETUP_LAUNCH=1")
 roomsetup_env+=("XRIZER_FORCE_HEADSET_ON_HEAD=1")
 # The Toolkit camera feed is published in the PSVR2 driver's raw tracking
 # universe.  Scope raw-space emulation to this Room Setup launch only; games

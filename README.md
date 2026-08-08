@@ -112,6 +112,7 @@ git clone https://github.com/Villagers654/framework-16-linux-psvr2.git
 cd framework-16-linux-psvr2
 ./install.sh --user --framework16-rx7700s
 ./scripts/fetch-community-tools.sh
+./scripts/install-community-driver.sh
 ./scripts/install-room-setup-binding.sh
 ./scripts/prepare-envision-runtime.sh
 ./scripts/build-envision-runtime.sh

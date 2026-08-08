@@ -15,6 +15,7 @@ config="${XDG_CONFIG_HOME:-$HOME/.config}/envision/envision.json"
 mkdir -p "$root" "$(dirname "$config")"
 
 monado_patches=(
+  "$repo/patches/monado-prefer-psvr2-toolkit.patch"
   "$repo/patches/monado-psvr2-sense.patch"
   "$repo/patches/monado-psvr2-usb-recovery.patch"
   "$repo/patches/monado-spectator-mirror.patch"

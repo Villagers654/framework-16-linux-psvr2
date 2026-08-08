@@ -2,15 +2,19 @@
 set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
 
-# Keep PSVR2 Sense discovery enabled by default because it carries controller input.
+# Use Monado's Sony-driver bridge for complete HMD and Sense optical tracking.
+# This loads the driver through Ignition; it does not launch Valve's SteamVR runtime.
 psvr2_sense="${PSVR2_LOAD_PSVR2_SENSE:-${LH_LOAD_PSVR2:-1}}"
-export STEAMVR_LH_ENABLE=0
+export STEAMVR_LH_ENABLE=true
 export LH_LOAD_LIGHTHOUSE=false
 case "$psvr2_sense" in
     0|false|FALSE|off|OFF|disabled|DISABLED|no|NO) export LH_LOAD_PSVR2=false ;;
     *) export LH_LOAD_PSVR2=true ;;
 esac
 export LH_DISCOVER_WAIT_MS=5000
+export STEAMVR_PATH="$STEAM_ROOT/steamapps/common/SteamVR"
+export PROTONPREFIX="$PSVR2_SETUP_ROOT/ignition-prefix"
+export PROTONVERSION="Proton - Experimental"
 export XRT_COMPOSITOR_SCALE_PERCENTAGE="$PSVR2_RENDER_SCALE"
 export XRT_COMPOSITOR_COMPUTE=1
 # Never inherit the abandoned experimental window-peek mirror path.

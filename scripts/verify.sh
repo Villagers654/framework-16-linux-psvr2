@@ -21,6 +21,8 @@ fi
 check test -x "$HOME/.local/share/psvr2-setup/wayvr/wayvr"
 check grep -aFq 'PSVR2 screenshot chord pressed' "$HOME/.local/share/psvr2-setup/wayvr/wayvr"
 check test -x "$HOME/.local/share/psvr2-setup/unity-setup/PSVR2Toolkit.UnitySetup.x86_64"
+check test -f "$HOME/.local/share/Steam/steamapps/common/PlayStation VR2 App/SteamVR_Plug-In/bin/win64/driver_playstation_vr2_orig.dll"
+check test -L "$HOME/.local/share/Steam/steamapps/common/PlayStation VR2 App/SteamVR_Plug-In/bin/linux64/driver_playstation_vr2.so"
 check test -x "$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
 check bash -c 'if command -v objdump >/dev/null 2>&1; then objdump -t "$1" 2>/dev/null | grep -aFq "t_builder_psvr2_create"; else strings "$1" | grep -aFq "t_builder_psvr2_create"; fi' _ \
     "$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
