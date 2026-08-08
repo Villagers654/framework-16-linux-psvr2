@@ -90,7 +90,8 @@ toolchain:
 
 ```bash
 brew install cmake ninja meson rust shaderc pkgconf \
-  alsa-lib pipewire libxkbcommon dbus openssl@3
+  alsa-lib dav1d pipewire libxkbcommon dbus openssl@3 \
+  vulkan-headers vulkan-loader
 ```
 
 On mutable Fedora, Arch, Debian/Ubuntu, or another distribution, install the

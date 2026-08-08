@@ -14,7 +14,8 @@ Use Homebrew for rapidly changing build dependencies where practical:
 
 ```bash
 brew install cmake ninja meson rust shaderc pkgconf \
-  alsa-lib pipewire libxkbcommon dbus openssl@3
+  alsa-lib dav1d pipewire libxkbcommon dbus openssl@3 \
+  vulkan-headers vulkan-loader
 ```
 
 The additional libraries are WayVR build dependencies. Keeping them in the

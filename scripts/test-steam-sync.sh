@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 workspace=$(mktemp -d)
-trap 'rm -rf -- "$workspace"' EXIT
+trap 'find "$workspace" -depth -delete' EXIT
 test_home="$workspace/home"
 steam="$test_home/Steam"
 install -d -m 0755 "$test_home/.config/psvr2-linux" \
@@ -72,7 +72,7 @@ cat > "$steam/config/config.vdf" <<'EOF'
 EOF
 
 HOME="$test_home" PSVR2_SYNC_RESTART_DASHBOARD=0 \
-  python3 "$repo/bin/psvr2-sync-steam-vr-games"
+  python3 "$repo/bin/psvr2-sync-steam-vr-games" --force
 
 state="$test_home/.local/share/psvr2-setup/steam-vr-apps.json"
 jq -e '."341800" == true and ."250820" == false' "$state" >/dev/null
