@@ -1,6 +1,5 @@
 [Unit]
 Description=PSVR2 room setup and boundary import
-Requires=psvr2-fossvr.service
 After=psvr2-fossvr.service
 
 [Service]

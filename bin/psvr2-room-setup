@@ -34,9 +34,10 @@ service_since=$(systemctl --user show psvr2-fossvr.service \
     --property=ActiveEnterTimestamp --value)
 tracking_ready=false
 chaperone="$STEAM_ROOT/config/playstation_vr2/chaperone_info.vrchap"
-if [[ -r "$chaperone" ]] \
+if [[ ! -e "$chaperone" ]] || { \
+    [[ -r "$chaperone" ]] \
     && grep -Eq '"play_area"[[:space:]]*:[[:space:]]*\[[[:space:]]*0([.]0+)?[[:space:]]*,[[:space:]]*0([.]0+)?[[:space:]]*\]' "$chaperone" \
-    && grep -Eq '"collision_bounds"[[:space:]]*:[[:space:]]*null' "$chaperone"; then
+    && grep -Eq '"collision_bounds"[[:space:]]*:[[:space:]]*null' "$chaperone"; }; then
     # A factory-fresh calibration has no standing transform to capture
     # incorrectly, and Room Setup itself is what creates the first stable map.
     tracking_ready=true
