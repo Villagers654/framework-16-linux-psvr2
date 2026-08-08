@@ -14,9 +14,38 @@ root="$ENVISION_PROFILE_ROOT"
 config="${XDG_CONFIG_HOME:-$HOME/.config}/envision/envision.json"
 mkdir -p "$root" "$(dirname "$config")"
 
+monado_patches=(
+  "$repo/patches/monado-psvr2-sense.patch"
+  "$repo/patches/monado-psvr2-usb-recovery.patch"
+  "$repo/patches/monado-spectator-mirror.patch"
+)
+xrizer_patches=(
+  "$repo/patches/xrizer-linux-room-setup.patch"
+  "$repo/patches/xrizer-chaperone-bounds.patch"
+  "$repo/patches/xrizer-linux-room-setup-tracking-guard.patch"
+  "$repo/patches/xrizer-room-setup-proximity.patch"
+)
+
+unapply_managed_patches() {
+  local tree=$1
+  shift
+  local patches=("$@") patch index
+  for ((index=${#patches[@]} - 1; index >= 0; index--)); do
+    patch=${patches[index]}
+    if git -C "$tree" apply --reverse --check "$patch" 2>/dev/null; then
+      git -C "$tree" apply --reverse "$patch"
+    fi
+  done
+  if ! git -C "$tree" diff --quiet || ! git -C "$tree" diff --cached --quiet; then
+    echo "Refusing to overwrite unmanaged changes in $tree" >&2
+    exit 1
+  fi
+}
+
 if [[ ! -d "$root/xrservice/.git" ]]; then
   git clone --branch psvr2-linux-steam-lh https://gitlab.freedesktop.org/Supremium/monado "$root/xrservice"
 fi
+unapply_managed_patches "$root/xrservice" "${monado_patches[@]}"
 git -C "$root/xrservice" fetch origin psvr2-linux-steam-lh
 git -C "$root/xrservice" checkout --detach 8bd01e7edec8028f65c7bff925195f0454d4bc9f
 apply_patch_once() {
@@ -30,22 +59,19 @@ apply_patch_once() {
     exit 1
   fi
 }
-apply_patch_once "$root/xrservice" "$repo/patches/monado-psvr2-sense.patch"
-apply_patch_once "$root/xrservice" "$repo/patches/monado-psvr2-usb-recovery.patch"
-apply_patch_once "$root/xrservice" "$repo/patches/monado-spectator-mirror.patch"
+for patch in "${monado_patches[@]}"; do
+  apply_patch_once "$root/xrservice" "$patch"
+done
 git -C "$root/xrservice" diff --check
 
 if [[ ! -d "$root/xrizer/.git" ]]; then
   git clone --recurse-submodules https://github.com/Supreeeme/xrizer "$root/xrizer"
 fi
+unapply_managed_patches "$root/xrizer" "${xrizer_patches[@]}"
 git -C "$root/xrizer" fetch origin
 git -C "$root/xrizer" checkout --detach 6c3e45f4c18b014a7aba87282ee0677306315052
 git -C "$root/xrizer" submodule update --init --recursive
-for patch in \
-  "$repo/patches/xrizer-linux-room-setup.patch" \
-  "$repo/patches/xrizer-chaperone-bounds.patch" \
-  "$repo/patches/xrizer-linux-room-setup-tracking-guard.patch" \
-  "$repo/patches/xrizer-room-setup-proximity.patch"; do
+for patch in "${xrizer_patches[@]}"; do
   apply_patch_once "$root/xrizer" "$patch"
 done
 git -C "$root/xrizer" diff --check
