@@ -13,8 +13,9 @@ rpm-ostree install envision openxr-devel wmctrl ImageMagick
 Use Homebrew for rapidly changing build dependencies where practical:
 
 ```bash
-brew install cmake ninja meson rust shaderc pkgconf \
-  alsa-lib dav1d pipewire libxkbcommon dbus openssl@3 \
+brew install cmake ninja meson rust eigen glslang shaderc pkgconf \
+  alsa-lib dav1d hidapi jpeg-turbo libusb pipewire sdl2-compat systemd \
+  libxkbcommon dbus openssl@3 \
   vulkan-headers vulkan-loader
 ```
 

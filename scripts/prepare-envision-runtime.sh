@@ -69,5 +69,5 @@ jq --slurpfile profile "$profile" '
 mv "$tmp" "$config"
 rm -f "$profile"
 
-echo "Envision profile installed. Open Envision, select the PSVR2 profile, and Clean Build."
+echo "Envision profile installed. Run ./scripts/build-envision-runtime.sh to build it."
 echo "The profile is pinned and pull-on-build is disabled so these patches persist."

@@ -24,12 +24,13 @@ cd framework-16-linux-psvr2
 ./scripts/fetch-community-tools.sh
 ./scripts/install-room-setup-binding.sh
 ./scripts/prepare-envision-runtime.sh
+./scripts/build-envision-runtime.sh
 ```
 
-Open Envision, select **PSVR2 Toolkit - 120 Hz / 1.7x**, and run **Clean
-Build** once. The installed profile has source pulling disabled, so Envision
-builds the pinned, already-patched Monado and xrizer trees without replacing
-them.
+The build script compiles the pinned, already-patched Monado and xrizer trees,
+checks every required PSVR2 feature, and rejects unresolved runtime libraries.
+The Envision profile has source pulling disabled, so opening Envision cannot
+silently replace those sources.
 
 Build and install the patched dashboard:
 

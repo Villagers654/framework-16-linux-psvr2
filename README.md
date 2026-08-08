@@ -89,8 +89,9 @@ Install Homebrew for Linux, then install the complete tested WayVR build
 toolchain:
 
 ```bash
-brew install cmake ninja meson rust shaderc pkgconf \
-  alsa-lib dav1d pipewire libxkbcommon dbus openssl@3 \
+brew install cmake ninja meson rust eigen glslang shaderc pkgconf \
+  alsa-lib dav1d hidapi jpeg-turbo libusb pipewire sdl2-compat systemd \
+  libxkbcommon dbus openssl@3 \
   vulkan-headers vulkan-loader
 ```
 
@@ -113,6 +114,7 @@ cd framework-16-linux-psvr2
 ./scripts/fetch-community-tools.sh
 ./scripts/install-room-setup-binding.sh
 ./scripts/prepare-envision-runtime.sh
+./scripts/build-envision-runtime.sh
 ./scripts/build-wayvr.sh
 ./scripts/build-xr-chaperone.sh
 sudo ./install.sh --system --framework16-rx7700s
@@ -120,14 +122,11 @@ sudo ./install.sh --system --framework16-rx7700s
 
 Then:
 
-1. Open Envision.
-2. Select **PSVR2 Toolkit – 120 Hz / 1.7x**.
-3. Choose **Clean Build** once.
-4. Run `./scripts/verify.sh`.
-5. Run `./scripts/verify-haptics.sh` for a controller-feedback validation pass.
-6. Reboot if you installed optional kernel arguments.
-
-7. Launch the boundary warning setup once:
+1. Open Envision and confirm **PSVR2 Toolkit – 120 Hz / 1.7x** is selected.
+2. Run `./scripts/verify.sh`.
+3. Run `./scripts/verify-haptics.sh` for a controller-feedback validation pass.
+4. Reboot if you installed optional kernel arguments.
+5. Launch the boundary warning setup once:
    `psvr2-chaperone configure`
 
 The installer never overwrites an existing settings file. Review it here:
