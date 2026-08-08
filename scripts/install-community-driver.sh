@@ -17,6 +17,7 @@ win64="$driver/bin/win64"
 official="$win64/driver_playstation_vr2_orig.dll"
 active="$win64/driver_playstation_vr2.dll"
 steam_settings="$steam_root/config/steamvr.vrsettings"
+psvr2_config="$steam_root/config/playstation_vr2"
 
 [[ -f "$driver/driver.vrdrivermanifest" ]] || {
   echo "PlayStation VR2 SteamVR driver is not installed at: $driver" >&2
@@ -35,6 +36,9 @@ done
 }
 
 install -d -m 0755 "$win64"
+# Sony's driver writes its map and chaperone files here but does not create the
+# parent directory on a fresh Linux Steam installation.
+install -d -m 0755 "$psvr2_config"
 if [[ ! -f "$official" ]]; then
   [[ -f "$active" ]] || {
     echo "Sony's original driver is missing: $active" >&2
