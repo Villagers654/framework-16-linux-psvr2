@@ -27,6 +27,11 @@ mkdir -p "$pycache"
 PYTHONPYCACHEPREFIX="$pycache" python3 -m py_compile bin/psvr2-sync-steam-vr-games
 python3 -m json.tool config/room-setup-bindings-oculus-touch.json >/dev/null
 python3 -m json.tool config/envision-profile.json.in >/dev/null
+bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
+  "$work_dir/chaperone.toml"
+test "$(grep -c '^\[\[boundary\]\]$' "$work_dir/chaperone.toml")" = 4
+python3 -c 'import sys,tomllib; tomllib.load(open(sys.argv[1], "rb"))' \
+  "$work_dir/chaperone.toml"
 for patch in patches/*.patch; do
   git apply --stat "$patch" >/dev/null
 done

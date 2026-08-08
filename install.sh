@@ -40,6 +40,7 @@ user_units=(
     psvr2-chaperone.service
     psvr2-fossvr-wayvr.service
     psvr2-fossvr.service
+    psvr2-room-setup.service
     psvr2-steam-vr-sync.path
     psvr2-steam-vr-sync.service
 )

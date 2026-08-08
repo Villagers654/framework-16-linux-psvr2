@@ -43,6 +43,11 @@ if [[ "$mode" == "service" && "${PSVR2_CHAPERONE_ENABLE:-0}" != "1" ]]; then
     exit 0
 fi
 
+if [[ "$mode" == "service" ]]; then
+    importer="${PSVR2_HELPER_DIR:-$HOME/.local/bin}/psvr2-import-boundary"
+    [[ ! -x "$importer" ]] || "$importer"
+fi
+
 export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
 export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
 

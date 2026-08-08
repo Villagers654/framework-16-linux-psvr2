@@ -135,6 +135,7 @@ if [[ "$calibration_changed" == true ]]; then
         'Reloading the VR origin and returning to WayVR.' 2>/dev/null || true
     PSVR2_DISCONNECT_CONTROLLERS=0 "$helper_dir/psvr2-fossvr-stop"
     "$helper_dir/psvr2-chaperone-sanity"
+    "$helper_dir/psvr2-import-boundary"
     # The proprietary driver releases several PSVR2 USB interfaces
     # asynchronously.  Give them time to settle before reacquiring the HMD.
     sleep 6

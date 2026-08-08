@@ -11,7 +11,7 @@ The finished experience is deliberately console-like:
 3. The headset opens directly to a filtered grid of installed Steam VR games.
 4. **PSVR2 Room Setup** is in that grid beside the games.
 5. Point, pull the trigger, and play.
-6. Optional visual boundary warning wall is available for all games in service mode.
+6. The PSVR2 Room Setup boundary is imported into the visual warning overlay.
 
 The tested default is **120 Hz** at Monado's **170% compositor scale**, which
 reports a distortion-corrected recommendation of **3400×3468 per eye** on this
@@ -127,8 +127,7 @@ Then:
 2. Run `./scripts/verify.sh`.
 3. Run `./scripts/verify-haptics.sh` for a controller-feedback validation pass.
 4. Reboot if you installed optional kernel arguments.
-5. Launch the boundary warning setup once:
-   `psvr2-chaperone configure`
+5. Run **PSVR2 Room Setup** once; its saved boundary is reused by xr-chaperone.
 
 The installer never overwrites an existing settings file. Review it here:
 
@@ -168,8 +167,8 @@ required.
 - Turn controllers on before or after headset launch: WayVR starts without
   blocking. Controllers can appear live over Bluetooth + HID; no Monado restart
   is required just to expose roles.
-- Configure once with **PSVR2 Chaperone Setup** (or `psvr2-chaperone configure`) to
-  render warning walls and fade geometry around your room boundary.
+- Run **PSVR2 Room Setup** once; its polygon automatically supplies
+  xr-chaperone's warning walls and fade geometry.
 - Warning geometry is visual-only and does not hard-block movement.
 - Set `PSVR2_CHAPERONE_ENABLE=0` in `settings.env` to disable the overlay.
 - Press either PS button: show or hide the WayVR dashboard.

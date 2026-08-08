@@ -12,6 +12,7 @@ check test -x "$HOME/.local/bin/psvr2-controller-disconnect"
 check test -x "$HOME/.local/bin/psvr2-chaperone-sanity"
 check test -x "$HOME/.local/bin/psvr2-screenshot"
 check test -x "$HOME/.local/bin/psvr2-chaperone"
+check test -x "$HOME/.local/bin/psvr2-import-boundary"
 check bash -c 'test "$(PSVR2_SCREENSHOT_WINDOW_LIST="$1" "$HOME/.local/bin/psvr2-screenshot" --print-window)" = 0x1' _ \
     '0x1 0 1 0 0 3840 2400 game.Game host VR Game'
 check test -x "$HOME/.local/bin/psvr2-spectator"
@@ -35,6 +36,7 @@ check test -f "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/re
 check grep -aFq 'Raw tracking space removes PSVR2 chaperone' "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/release/libxrizer.so"
 check grep -Fq 'XRIZER_FORCE_RAW_TRACKING_SPACE=1' "$HOME/.local/bin/psvr2-room-setup"
 check grep -Fq 'PSVR2 play area saved' "$HOME/.local/bin/psvr2-room-setup"
+check grep -Fq 'psvr2-room-setup.service' "$repo/patches/wayvr-psvr2-dashboard.patch"
 check bash -c 'bash "$1"' _ "$repo/scripts/verify-haptics.sh"
 check bash -c 'getcap "$1" | grep -Fq "cap_sys_nice=eip"' _ \
     "$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"

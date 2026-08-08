@@ -1,0 +1,114 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+steam_root=${STEAM_ROOT:-"$HOME/.local/share/Steam"}
+source_file=${1:-"$steam_root/config/playstation_vr2/chaperone_info.vrchap"}
+target_file=${2:-"${XDG_CONFIG_HOME:-$HOME/.config}/xr-chaperone/chaperone.toml"}
+[[ -r "$source_file" ]] || exit 0
+
+python3 - "$source_file" "$target_file" <<'PY'
+import json
+import math
+import os
+import pathlib
+import sys
+import tempfile
+import tomllib
+
+source = pathlib.Path(sys.argv[1])
+target = pathlib.Path(sys.argv[2])
+with source.open("rb") as stream:
+    data = json.load(stream)
+
+walls = next(
+    (u.get("collision_bounds") for u in data.get("universes", [])
+     if isinstance(u, dict) and u.get("collision_bounds")),
+    None,
+)
+if not walls:
+    raise SystemExit(f"PSVR2 boundary import: no collision bounds in {source}")
+
+segments = []
+for wall in walls:
+    if not isinstance(wall, list) or len(wall) < 2:
+        continue
+    points = [p for p in wall if isinstance(p, list) and len(p) >= 3]
+    if len(points) < 2:
+        continue
+    floor = sorted(points, key=lambda p: float(p[1]))[:2]
+    segments.append(((float(floor[0][0]), float(floor[0][2])),
+                     (float(floor[1][0]), float(floor[1][2]))))
+
+if len(segments) < 3:
+    raise SystemExit(f"PSVR2 boundary import: only {len(segments)} usable walls in {source}")
+
+# Collision quads describe adjoining wall segments. Chain nearest endpoints so
+# concave play areas retain their original perimeter instead of being angle-sorted.
+start_a, start_b = segments.pop(0)
+boundary = [start_a, start_b]
+while segments:
+    current = boundary[-1]
+    choice = min(
+        range(len(segments)),
+        key=lambda i: min(math.dist(current, segments[i][0]),
+                          math.dist(current, segments[i][1])),
+    )
+    a, b = segments.pop(choice)
+    boundary.append(b if math.dist(current, a) <= math.dist(current, b) else a)
+
+if len(boundary) > 3 and math.dist(boundary[0], boundary[-1]) < 0.02:
+    boundary.pop()
+deduped = []
+for point in boundary:
+    if not deduped or math.dist(point, deduped[-1]) >= 0.005:
+        deduped.append(point)
+boundary = deduped
+if len(boundary) < 3:
+    raise SystemExit("PSVR2 boundary import: resulting polygon has fewer than 3 points")
+
+defaults = {
+    "fade_start": 0.75,
+    "fade_end": 0.0,
+    "wall_height": 2.5,
+    "grid_spacing": 0.4,
+    "line_width": 0.01,
+    "grid_colour": [0.0, 0.6, 1.0, 1.0],
+}
+if target.exists():
+    try:
+        with target.open("rb") as stream:
+            existing = tomllib.load(stream)
+        for key in defaults:
+            if key in existing:
+                defaults[key] = existing[key]
+    except (OSError, tomllib.TOMLDecodeError):
+        pass
+
+target.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+lines = [
+    f"fade_start = {float(defaults['fade_start']):.6g}",
+    f"fade_end = {float(defaults['fade_end']):.6g}",
+    f"wall_height = {float(defaults['wall_height']):.6g}",
+    f"grid_spacing = {float(defaults['grid_spacing']):.6g}",
+    f"line_width = {float(defaults['line_width']):.6g}",
+    "grid_colour = [" + ", ".join(f"{float(v):.6g}" for v in defaults["grid_colour"]) + "]",
+    "",
+]
+for x, z in boundary:
+    lines.extend(("[[boundary]]", f"x = {x:.9g}", f"z = {z:.9g}", ""))
+
+fd, temporary = tempfile.mkstemp(prefix=target.name + ".", dir=target.parent)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write("\n".join(lines))
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, target)
+except BaseException:
+    try:
+        os.unlink(temporary)
+    except FileNotFoundError:
+        pass
+    raise
+
+print(f"Imported {len(boundary)} PSVR2 boundary points into {target}")
+PY

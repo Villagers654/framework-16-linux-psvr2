@@ -126,14 +126,16 @@ index 56ce0bb6..21f44028 100644
  fn vdf_parse_libraryfolders<'a>(vdf_root: &'a Vdf<'a>) -> Option<Vec<AppEntry>> {
  	let obj_libraryfolders = vdf_root.value.get_obj()?;
  
-@@ -127,7 +210,12 @@ struct AppEntry {
+@@ -127,7 +210,14 @@ struct AppEntry {
  
  pub fn launch(app_id: &AppID) -> anyhow::Result<()> {
  	log::info!("Launching Steam game with AppID {}", app_id);
 -	call_steam(&format!("steam://rungameid/{}", app_id))?;
 +	if app_id == PSVR2_ROOM_SETUP_APP_ID {
-+		let launcher = PathBuf::from(std::env::var("HOME")?).join(".local/bin/psvr2-room-setup");
-+		std::process::Command::new(launcher).spawn()?;
++		// Escape WayVR's service cgroup so calibration survives dashboard lifecycle changes.
++		std::process::Command::new("systemctl")
++			.args(["--user", "start", "psvr2-room-setup.service"])
++			.spawn()?;
 +		return Ok(());
 +	}
 +	call_steam(&format!("steam://launch/{}/vr", app_id))?;
