@@ -3,8 +3,8 @@ set -euo pipefail
 
 # RiftLift owns the Meta/Revive compatibility stack. This PSVR2 integration
 # consumes its tagged installer exactly like any other third-party application.
-tag=v0.2.0
-commit=ead48b8fe4bfccf428337c72251763dfa71082f4
+tag=v0.3.1
+commit=3a9ddfb70d915177ac4f32ca36a2687f3abcd4d7
 source_dir=${RIFTLIFT_SOURCE_DIR:-"${XDG_DATA_HOME:-$HOME/.local/share}/psvr2-setup/src/riftlift"}
 
 command -v git >/dev/null 2>&1 || { echo "Missing required command: git" >&2; exit 1; }

@@ -112,9 +112,10 @@ perl -i -pe 's/^PSVR2_CHAPERONE_ENABLE=.*/PSVR2_CHAPERONE_ENABLE=0/' ~/.config/p
 
 ## 6. Optional Meta Rift games
 
-Meta/Revive compatibility is maintained independently by RiftLift. Install its
-pinned release through this repository's third-party helper, sign in once, then
-add any owned Rift store URL:
+Meta/Revive compatibility is maintained independently by RiftLift. This
+repository does not patch Meta, Revive, or Rift game launch behavior. Install
+RiftLift's pinned release through the thin third-party helper, sign in once,
+then add any owned Rift store URL:
 
 ```bash
 ./scripts/install-riftlift.sh
