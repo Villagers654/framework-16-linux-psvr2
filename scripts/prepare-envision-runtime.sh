@@ -19,6 +19,7 @@ monado_patches=(
   "$repo/patches/monado-psvr2-sense.patch"
   "$repo/patches/monado-psvr2-usb-recovery.patch"
   "$repo/patches/monado-spectator-mirror.patch"
+  "$repo/patches/monado-stage-bounds.patch"
 )
 xrizer_patches=(
   "$repo/patches/xrizer-linux-room-setup.patch"

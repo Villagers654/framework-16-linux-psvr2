@@ -17,6 +17,36 @@ export PROTONPREFIX="$PSVR2_SETUP_ROOT/ignition-prefix"
 export PROTONVERSION="Proton - Experimental"
 export XRT_COMPOSITOR_SCALE_PERCENTAGE="$PSVR2_RENDER_SCALE"
 export XRT_COMPOSITOR_COMPUTE=1
+# Monado's native compositor does not currently publish room-scale extents.
+# Derive the enclosing OpenXR stage rectangle from the same polygon used by
+# xr-chaperone so applications see the play area configured by Room Setup.
+boundary_file="${PSVR2_CHAPERONE_CONFIG:-$HOME/.config/xr-chaperone/chaperone.toml}"
+if [[ -r "$boundary_file" ]]; then
+    read -r stage_width stage_depth < <(
+        awk -F= '
+            /^[[:space:]]*x[[:space:]]*=/ {
+                value = $2 + 0
+                if (!have_x || value < min_x) min_x = value
+                if (!have_x || value > max_x) max_x = value
+                have_x = 1
+            }
+            /^[[:space:]]*z[[:space:]]*=/ {
+                value = $2 + 0
+                if (!have_z || value < min_z) min_z = value
+                if (!have_z || value > max_z) max_z = value
+                have_z = 1
+            }
+            END {
+                if (have_x && have_z && max_x > min_x && max_z > min_z)
+                    printf "%.6f %.6f\n", max_x - min_x, max_z - min_z
+            }
+        ' "$boundary_file"
+    )
+    if [[ -n "${stage_width:-}" && -n "${stage_depth:-}" ]]; then
+        export XRT_STAGE_BOUNDS_WIDTH="$stage_width"
+        export XRT_STAGE_BOUNDS_HEIGHT="$stage_depth"
+    fi
+fi
 # Never inherit the abandoned experimental window-peek mirror path.
 unset XRT_WINDOW_PEEK
 if [[ "$PSVR2_SPECTATOR_ENABLE" = 1 ]]; then

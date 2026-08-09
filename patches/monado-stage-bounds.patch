@@ -1,0 +1,45 @@
+diff --git a/src/xrt/ipc/server/ipc_server_handler.c b/src/xrt/ipc/server/ipc_server_handler.c
+index 7231ab489..a46cd9823 100644
+--- a/src/xrt/ipc/server/ipc_server_handler.c
++++ b/src/xrt/ipc/server/ipc_server_handler.c
+@@ -24,6 +24,8 @@
+ #include "xrt/xrt_compositor.h"
+ #include "xrt/xrt_results.h"
+ 
++#include <stdlib.h>
++
+ #ifdef XRT_GRAPHICS_SYNC_HANDLE_IS_FD
+ #include <unistd.h>
+ #endif
+@@ -1553,7 +1555,30 @@ ipc_handle_compositor_get_reference_bounds_rect(volatile struct ipc_client_state
+ 		return XRT_ERROR_IPC_SESSION_NOT_CREATED;
+ 	}
+ 
+-	return xrt_comp_get_reference_bounds_rect(ics->xc, reference_space_type, bounds);
++	xrt_result_t xret = xrt_comp_get_reference_bounds_rect(ics->xc, reference_space_type, bounds);
++
++	/*
++	 * Some native compositors do not yet expose stage bounds even when a
++	 * room-scale boundary was supplied by an external setup tool.  Allow the
++	 * service launcher to provide the enclosing rectangle so OpenXR clients do
++	 * not see XR_SPACE_BOUNDS_UNAVAILABLE for an otherwise valid stage space.
++	 */
++	if ((xret == XRT_ERROR_NOT_IMPLEMENTED || xret == XRT_SPACE_BOUNDS_UNAVAILABLE) &&
++	    reference_space_type == XRT_SPACE_REFERENCE_TYPE_STAGE) {
++		const char *width_string = getenv("XRT_STAGE_BOUNDS_WIDTH");
++		const char *height_string = getenv("XRT_STAGE_BOUNDS_HEIGHT");
++		if (width_string != NULL && height_string != NULL) {
++			float width = strtof(width_string, NULL);
++			float height = strtof(height_string, NULL);
++			if (width > 0.0f && height > 0.0f) {
++				bounds->x = width;
++				bounds->y = height;
++				return XRT_SUCCESS;
++			}
++		}
++	}
++
++	return xret;
+ }
+ 
+ xrt_result_t
