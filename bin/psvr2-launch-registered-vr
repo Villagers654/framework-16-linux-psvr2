@@ -1,0 +1,65 @@
+#!/usr/bin/python3
+"""Launch a binary entry registered in Steam's VR manifest."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import sys
+from pathlib import Path
+
+
+def steam_root() -> Path:
+    root = Path.home() / ".local/share/Steam"
+    config = Path.home() / ".config/psvr2-linux/settings.env"
+    if config.is_file():
+        match = re.search(r'^STEAM_ROOT="?([^"\n]+)', config.read_text(errors="replace"), re.M)
+        if match:
+            root = Path(os.path.expandvars(match.group(1))).expanduser()
+    return root
+
+
+def registered_launcher(appid: str) -> tuple[Path, Path, list[str]]:
+    manifest = steam_root() / "config/steamapps.vrmanifest"
+    payload = json.loads(manifest.read_text(errors="strict"))
+    for entry in payload.get("applications", []):
+        if not isinstance(entry, dict) or entry.get("app_key") != f"steam.app.{appid}":
+            continue
+        if entry.get("launch_type") != "binary":
+            raise RuntimeError(f"Steam VR app {appid} is not a binary launcher")
+        binary = Path(os.path.expandvars(str(entry.get("binary_path_linux", "")))).expanduser()
+        if not binary.is_absolute() or not binary.is_file() or not os.access(binary, os.X_OK):
+            raise RuntimeError(f"Registered VR launcher is missing or not executable: {binary}")
+        working = Path(os.path.expandvars(str(entry.get("working_directory", "")))).expanduser()
+        if not working.is_absolute() or not working.is_dir():
+            working = binary.parent
+        arguments = shlex.split(str(entry.get("arguments", "")))
+        return binary, working, arguments
+    raise RuntimeError(f"Steam VR manifest has no registered binary launcher for {appid}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("appid")
+    args = parser.parse_args()
+    if not args.appid.isdecimal():
+        parser.error("appid must be decimal")
+    try:
+        binary, working, arguments = registered_launcher(args.appid)
+    except (OSError, UnicodeError, json.JSONDecodeError, RuntimeError, ValueError) as error:
+        print(f"PSVR2 registered VR launch failed: {error}", file=sys.stderr)
+        return 1
+    if args.check:
+        print(binary)
+        return 0
+    os.chdir(working)
+    os.execv(binary, [str(binary), *arguments])
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

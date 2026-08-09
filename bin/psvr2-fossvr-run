@@ -19,6 +19,7 @@ if ! systemctl --user is-active --quiet psvr2-fossvr.service ||
 fi
 
 socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc"
+game_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-game-active"
 if [[ ! -S "$socket" ]] || ! ss -H -xl | grep -Fq "$socket"; then
     echo "Monado is active but its IPC socket is unavailable; repairing the runtime" >&2
     "$start_helper"
@@ -31,11 +32,49 @@ fi
 export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
 export VR_OVERRIDE="$ENVISION_PROFILE_ROOT/xrizer/target/release"
 export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
+export OXR_ZERO_TIME_IS_NOW=1
 export PRESSURE_VESSEL_FILESYSTEMS_RW="$socket${PRESSURE_VESSEL_FILESYSTEMS_RW:+:$PRESSURE_VESSEL_FILESYSTEMS_RW}"
+# Keep every game-side Vulkan/DXVK device on the same dGPU as Monado. Hybrid
+# systems otherwise let secondary DLLs select the iGPU, which deadlocks shared
+# VR textures even when the game's primary D3D device picked the dGPU.
+if [[ -n "$AMD_VULKAN_DEVICE" ]]; then
+    export MESA_VK_DEVICE_SELECT="${AMD_VULKAN_DEVICE}!"
+    export MESA_VK_DEVICE_SELECT_FORCE_DEFAULT_DEVICE=1
+    export AMD_VULKAN_DEVICE
+fi
+if [[ -n "$DGPU_PCI_ADDRESS" ]]; then
+    export DRI_PRIME="pci-${DGPU_PCI_ADDRESS//:/_}"
+    export DRI_PRIME="${DRI_PRIME//./_}"
+fi
 # VR frame pacing comes from OpenXR's wait-frame path. Never let a game's
 # optional desktop mirror add a second, laptop-display vblank deadline.
 export vblank_mode=0
 export MESA_VK_WSI_PRESENT_MODE=immediate
+
+# A game may create a short-lived probe session before its real compositor
+# session. WayVR's overlay can keep that probe in READY indefinitely, so hand
+# the HMD off before starting the title. The independent transient game unit
+# survives this service stop and WayVR is restored after the title exits.
+touch "$game_active_file"
+systemctl --user stop psvr2-fossvr-wayvr.service
+
+game_pid=""
+runtime_watcher=""
+forward_signal() {
+    [[ -n "$game_pid" ]] && kill -TERM -- "-$game_pid" 2>/dev/null || true
+}
+cleanup() {
+    if [[ -n "$runtime_watcher" ]]; then
+        kill "$runtime_watcher" 2>/dev/null || true
+        wait "$runtime_watcher" 2>/dev/null || true
+    fi
+    rm -f "$game_active_file"
+    if systemctl --user is-active --quiet psvr2-fossvr.service; then
+        systemctl --user restart psvr2-fossvr-wayvr.service || true
+    fi
+}
+trap forward_signal HUP INT TERM
+trap cleanup EXIT
 
 # Put each Steam launch in its own process group. If a Proton/Wine child
 # outlives the launcher or the headset disappears, the whole title exits and
@@ -57,26 +96,8 @@ game_pid=$!
 ) &
 runtime_watcher=$!
 
-forward_signal() { kill -TERM -- "-$game_pid" 2>/dev/null || true; }
-cleanup_watcher() {
-    kill "$runtime_watcher" 2>/dev/null || true
-    wait "$runtime_watcher" 2>/dev/null || true
-}
-trap forward_signal HUP INT TERM
-trap cleanup_watcher EXIT
-
 set +e
 wait "$game_pid"
 game_status=$?
 set -e
-cleanup_watcher
-trap - EXIT HUP INT TERM
-
-# A primary OpenXR/OpenVR application suppresses WayVR while it owns the HMD.
-# Recreate only the overlay after the game exits so the headset returns to the
-# Games dashboard instead of Monado's otherwise-empty fallback environment.
-# Keep Monado alive to preserve the calibrated tracking origin.
-if systemctl --user is-active --quiet psvr2-fossvr.service; then
-    systemctl --user restart psvr2-fossvr-wayvr.service || true
-fi
 exit "$game_status"

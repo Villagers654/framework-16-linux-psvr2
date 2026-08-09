@@ -55,7 +55,7 @@ diff --git a/dash-frontend/src/util/steam_utils.rs b/dash-frontend/src/util/stea
  fn vdf_parse_libraryfolders<'a>(vdf_root: &'a Vdf<'a>) -> Option<Vec<AppEntry>> {
  	let obj_libraryfolders = vdf_root.value.get_obj()?;
  
-@@ -217,6 +264,14 @@ pub fn launch(app_id: &AppID) -> anyhow::Result<()> {
+@@ -217,6 +264,24 @@ pub fn launch(app_id: &AppID) -> anyhow::Result<()> {
  			.spawn()?;
  		return Ok(());
  	}
@@ -64,13 +64,23 @@ diff --git a/dash-frontend/src/util/steam_utils.rs b/dash-frontend/src/util/stea
 +			.iter()
 +			.any(|manifest| manifest.app_id == *app_id)
 +	{
-+		call_steam(&format!("steam://rungameid/{}", app_id))?;
++		let helper = PathBuf::from(std::env::var("HOME")?).join(".local/bin/psvr2-launch-registered-vr");
++		let status = std::process::Command::new("systemd-run")
++			.args(["--user", "--collect"])
++			.arg(format!("--unit=psvr2-vr-game-{}.service", app_id))
++			.arg("--")
++			.arg(helper)
++			.arg(app_id)
++			.status()?;
++		if !status.success() {
++			anyhow::bail!("Failed to start registered VR launcher for {}", app_id);
++		}
 +		return Ok(());
 +	}
  	call_steam(&format!("steam://launch/{}/vr", app_id))?;
  	Ok(())
  }
-@@ -448,10 +503,16 @@ impl SteamUtils {
+@@ -448,10 +513,16 @@ impl SteamUtils {
  
  		let vr_cache_path = PathBuf::from(std::env::var("HOME")?)
  			.join(".local/share/psvr2-setup/steam-vr-apps.json");

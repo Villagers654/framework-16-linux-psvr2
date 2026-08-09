@@ -25,6 +25,7 @@ fi
 pycache="$work_dir/pycache"
 mkdir -p "$pycache"
 PYTHONPYCACHEPREFIX="$pycache" python3 -m py_compile bin/psvr2-sync-steam-vr-games
+PYTHONPYCACHEPREFIX="$pycache" python3 -m py_compile bin/psvr2-launch-registered-vr
 python3 -m json.tool config/room-setup-bindings-oculus-touch.json >/dev/null
 python3 -m json.tool config/envision-profile.json.in >/dev/null
 grep -Fq 'PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1' \
