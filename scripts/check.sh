@@ -32,6 +32,11 @@ grep -Fq 'PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1' \
   config/environment.d/60-psvr2-openxr.conf.in
 grep -Fq 'psvr2-sync-steam-vr-games --discovery-only' \
   systemd/user/psvr2-steam-vr-sync.service
+grep -Fq '\[HMD\] Track at p:.*\(st: 2 1 4\)' bin/psvr2-room-setup
+grep -Fq '\[HMD\] (Jump|Lost)' bin/psvr2-room-setup
+grep -Fq 'systemctl --user stop psvr2-chaperone.service' bin/psvr2-room-setup
+grep -Fq 'required after *every*' bin/psvr2-room-setup
+grep -Fq 'while kill -0 -- "-$game_pid"' bin/psvr2-fossvr-run
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
   "$work_dir/chaperone.toml"
 test "$(grep -c '^\[\[boundary\]\]$' "$work_dir/chaperone.toml")" = 4

@@ -86,7 +86,10 @@ game_pid=$!
 # wrapped VR title as well instead of leaving Proton/Steam showing it as
 # running without a headset.
 (
-    while kill -0 "$game_pid" 2>/dev/null; do
+    # Revive and several launchers inject into a child, then let their original
+    # process exit. The child remains in the setsid process group, so monitor
+    # the group rather than only its short-lived leader.
+    while kill -0 -- "-$game_pid" 2>/dev/null; do
         if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
             kill -TERM -- "-$game_pid" 2>/dev/null || true
             exit 0
@@ -100,4 +103,11 @@ set +e
 wait "$game_pid"
 game_status=$?
 set -e
+
+# Do not restore WayVR while a detached/injected game is still alive. Wine
+# reparents those processes to the user manager, but it preserves the launch
+# session's process group, which gives us a runtime-agnostic ownership handle.
+while kill -0 -- "-$game_pid" 2>/dev/null; do
+    sleep 0.25
+done
 exit "$game_status"

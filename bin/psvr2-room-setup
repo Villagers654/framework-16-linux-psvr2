@@ -28,8 +28,9 @@ helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 # The live camera mesh is created from the HMD pose captured when Unity starts.
 # After boot/relocalization the driver can report a valid-looking pose and then
 # jump to its latched map origin. Starting in that window permanently distorts
-# passthrough for this process. Require a stable tracking state and a jump-free
-# settling window before xrizer creates Room Setup's raw reference space.
+# passthrough for this process. Require either the legacy "stable" transition
+# or the current driver's fully tracked HMD sample, followed by a jump-free
+# settling window, before xrizer creates Room Setup's raw reference space.
 service_since=$(systemctl --user show psvr2-fossvr.service \
     --property=ActiveEnterTimestamp --value)
 tracking_ready=false
@@ -43,14 +44,18 @@ if [[ ! -e "$chaperone" ]] || { \
     tracking_ready=true
 else
     for _ in $(seq 1 60); do
-        last_status=$(journalctl --user -u psvr2-fossvr.service \
+        tracking_log=$(journalctl --user -u psvr2-fossvr.service \
             --since "$service_since" --no-pager 2>/dev/null \
-            | grep 'TrackingStatus' | tail -n 1 || true)
-        if [[ "$last_status" == *'-> stable' ]]; then
+            | tail -n 400 || true)
+        # Older releases explicitly transitioned to "stable". The current
+        # Sony bridge instead remains in its map-search state while publishing
+        # usable 6DoF HMD samples; state tuple 2/1/4 is its fully tracked pose.
+        if grep -Eq 'TrackingStatus.*-> stable|\[HMD\] Track at p:.*\(st: 2 1 4\)' \
+            <<<"$tracking_log"; then
             sleep 3
             if ! journalctl --user -u psvr2-fossvr.service \
                 --since '4 seconds ago' --no-pager 2>/dev/null \
-                | grep -Eq '\[HMD\] Jump|TrackingStatus.*-> (searching|unstable|lost)|map registration error 0 -> 1'; then
+                | grep -Eq '\[HMD\] (Jump|Lost)|TrackingStatus.*-> (unstable|lost)|map registration error 0 -> 1'; then
                 tracking_ready=true
                 break
             fi
@@ -65,6 +70,25 @@ if [[ "$tracking_ready" != true ]]; then
     echo 'PSVR2 tracking did not stabilize; refusing to capture a broken camera reference.' >&2
     exit 1
 fi
+
+# Room Setup deliberately asks the user to place the HMD on the floor and can
+# move the driver's live tracking origin before it commits the new chaperone
+# file.  An already-running xr-chaperone session keeps its old STAGE space in
+# that interval, which makes the saved floor boundary appear at chest height.
+# Hide the stale overlay throughout calibration; it will be recreated against
+# the reloaded runtime below.
+chaperone_was_active=false
+if systemctl --user is-active --quiet psvr2-chaperone.service; then
+    chaperone_was_active=true
+    systemctl --user stop psvr2-chaperone.service
+fi
+restore_chaperone() {
+    if [[ "$chaperone_was_active" == true ]] \
+        && systemctl --user is-active --quiet psvr2-fossvr.service; then
+        systemctl --user start psvr2-chaperone.service 2>/dev/null || true
+    fi
+}
+trap restore_chaperone EXIT
 
 roomsetup_env=()
 roomsetup_env+=("PSVR2_ROOM_SETUP_LAUNCH=1")
@@ -134,25 +158,33 @@ set -e
 if [[ "$calibration_changed" == true ]]; then
     notify-send 'PSVR2 play area saved' \
         'Reloading the VR origin and returning to WayVR.' 2>/dev/null || true
-    PSVR2_DISCONNECT_CONTROLLERS=0 "$helper_dir/psvr2-fossvr-stop"
-    "$helper_dir/psvr2-chaperone-sanity"
-    "$helper_dir/psvr2-import-boundary"
-    # The proprietary driver releases several PSVR2 USB interfaces
-    # asynchronously.  Give them time to settle before reacquiring the HMD.
-    sleep 6
-    started=false
-    for _ in 1 2 3; do
-        if "$helper_dir/psvr2-fossvr-start"; then
-            started=true
-            break
-        fi
-        sleep 5
-    done
-    if [[ "$started" != true ]]; then
-        notify-send -u critical 'PSVR2 reload failed' \
-            'Power-cycle the headset, then run psvr2-fossvr-start.' 2>/dev/null || true
-        exit 1
+fi
+
+# The Toolkit mutates the driver's in-memory raw/standing origin as soon as its
+# floor step runs, even if the wizard is later cancelled and the on-disk file
+# never changes. A fresh Monado process is therefore required after *every*
+# Room Setup run, not only after a successful save. Otherwise that transient
+# floor pose leaks into xr-chaperone and all subsequent games.
+PSVR2_DISCONNECT_CONTROLLERS=0 "$helper_dir/psvr2-fossvr-stop"
+"$helper_dir/psvr2-chaperone-sanity"
+"$helper_dir/psvr2-import-boundary"
+# The proprietary driver releases several PSVR2 USB interfaces
+# asynchronously. Give them time to settle before reacquiring the HMD.
+sleep 6
+started=false
+for _ in 1 2 3; do
+    if "$helper_dir/psvr2-fossvr-start"; then
+        started=true
+        break
     fi
+    sleep 5
+done
+if [[ "$started" != true ]]; then
+    notify-send -u critical 'PSVR2 reload failed' \
+        'Power-cycle the headset, then run psvr2-fossvr-start.' 2>/dev/null || true
+    exit 1
+fi
+if [[ "$calibration_changed" == true ]]; then
     exit 0
 fi
 
