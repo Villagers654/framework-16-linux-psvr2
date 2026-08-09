@@ -20,9 +20,9 @@ assert_monado_profile_supports_psvr2() {
         return 0
     fi
     configured=$(jq -r '.user_profiles[] | select(.uuid=="psvr2-toolkit-monado") | .xrservice_cmake_flags.XRT_BUILD_DRIVER_PSVR2 // ""' "$profile_json" 2>/dev/null || true)
-    if [[ "$configured" == "OFF" || "$configured" == "" ]]; then
-        echo "Envision profile currently disables PSVR2 runtime support (XRT_BUILD_DRIVER_PSVR2=$configured)." >&2
-        echo "Run ./scripts/prepare-envision-runtime.sh to reapply the fixed profile, then Clean Build in Envision." >&2
+    if [[ "$configured" != "OFF" ]]; then
+        echo "Toolkit + Ignition requires native Monado PSVR2 support OFF (XRT_BUILD_DRIVER_PSVR2=$configured)." >&2
+        echo "Run ./scripts/prepare-envision-runtime.sh to reapply the community-wiki profile, then rebuild." >&2
         return 1
     fi
     return 0
@@ -35,12 +35,12 @@ assert_monado_binary_has_psvr2_builder() {
         echo "Monado binary missing or non-executable: $monado_binary" >&2
         return 1
     fi
-    if grep -aFq "t_builder_psvr2_create" "$monado_binary" 2>/dev/null; then
+    if grep -aFq "steamvr_open_system" "$monado_binary" 2>/dev/null; then
         found_builder=1
     fi
     if [[ "$found_builder" != "1" ]]; then
-        echo "Monado was built without the PSVR2 driver (XRT_BUILD_DRIVER_PSVR2 is OFF)." >&2
-        echo "Re-run ./scripts/prepare-envision-runtime.sh and perform a Clean Build in Envision." >&2
+        echo "Monado was built without the SteamVR driver bridge required by PSVR2 Toolkit." >&2
+        echo "Re-run ./scripts/prepare-envision-runtime.sh and rebuild the pinned runtime." >&2
         return 1
     fi
     return 0

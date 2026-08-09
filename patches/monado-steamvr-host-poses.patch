@@ -1,0 +1,82 @@
+diff --git a/src/xrt/drivers/steamvr_lh/steamvr_lh.cpp b/src/xrt/drivers/steamvr_lh/steamvr_lh.cpp
+--- a/src/xrt/drivers/steamvr_lh/steamvr_lh.cpp
++++ b/src/xrt/drivers/steamvr_lh/steamvr_lh.cpp
+@@ -528,21 +528,59 @@ Context::GetRawTrackedDevicePoses(float fPredictedSecondsFromNow,
+                                   vr::TrackedDevicePose_t *pTrackedDevicePoseArray,
+                                   uint32_t unTrackedDevicePoseArrayCount)
+ {
+-	// This is the bare minimum required for SlimeVR's HMD feedback to work
+-	if (unTrackedDevicePoseArrayCount != 10 || this->hmd == nullptr)
++	if (pTrackedDevicePoseArray == nullptr || unTrackedDevicePoseArrayCount == 0)
+ 		return;
+-	const uint64_t time =
++
++	std::fill_n(pTrackedDevicePoseArray, unTrackedDevicePoseArrayCount, vr::TrackedDevicePose_t{});
++	const int64_t now =
+ 	    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
+ 	        .count();
+-	xrt_space_relation head = {};
+-	xrt_device_get_tracked_pose(this->hmd, XRT_INPUT_GENERIC_HEAD_POSE, time, &head);
+-	xrt_matrix_3x3 rot = {};
+-	math_matrix_3x3_from_quat(&head.pose.orientation, &rot);
+-	pTrackedDevicePoseArray[0].mDeviceToAbsoluteTracking = {{
+-	    {rot.v[0], rot.v[3], rot.v[6], head.pose.position.x},
+-	    {rot.v[1], rot.v[4], rot.v[7], head.pose.position.y},
+-	    {rot.v[2], rot.v[5], rot.v[8], head.pose.position.z},
+-	}};
++	const int64_t predicted = static_cast<int64_t>(fPredictedSecondsFromNow * 1000000000.0f);
++	const uint64_t time = static_cast<uint64_t>(std::max<int64_t>(0, now + predicted));
++
++	auto write_pose = [time](Device *device, vr::TrackedDevicePose_t &out) {
++		if (device == nullptr)
++			return;
++
++		xrt_space_relation relation = {};
++		device->get_pose(time, &relation);
++		const auto flags = relation.relation_flags;
++		const bool orientation_valid = (flags & XRT_SPACE_RELATION_ORIENTATION_VALID_BIT) != 0;
++		const bool position_valid = (flags & XRT_SPACE_RELATION_POSITION_VALID_BIT) != 0;
++		const bool orientation_tracked = (flags & XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT) != 0;
++		const bool position_tracked = (flags & XRT_SPACE_RELATION_POSITION_TRACKED_BIT) != 0;
++
++		out.bDeviceIsConnected = true;
++		out.bPoseIsValid = orientation_valid && position_valid;
++		if (orientation_tracked && position_tracked) {
++			out.eTrackingResult = vr::TrackingResult_Running_OK;
++		} else if (orientation_tracked) {
++			out.eTrackingResult = vr::TrackingResult_Fallback_RotationOnly;
++		} else if (orientation_valid || position_valid) {
++			out.eTrackingResult = vr::TrackingResult_Running_OutOfRange;
++		} else {
++			out.eTrackingResult = vr::TrackingResult_Uninitialized;
++		}
++
++		if (orientation_valid) {
++			xrt_matrix_3x3 rot = {};
++			math_matrix_3x3_from_quat(&relation.pose.orientation, &rot);
++			out.mDeviceToAbsoluteTracking = {{
++			    {rot.v[0], rot.v[3], rot.v[6], relation.pose.position.x},
++			    {rot.v[1], rot.v[4], rot.v[7], relation.pose.position.y},
++			    {rot.v[2], rot.v[5], rot.v[8], relation.pose.position.z},
++			}};
++		}
++		out.vVelocity = {{relation.linear_velocity.x, relation.linear_velocity.y, relation.linear_velocity.z}};
++		out.vAngularVelocity =
++		    {{relation.angular_velocity.x, relation.angular_velocity.y, relation.angular_velocity.z}};
++	};
++
++	write_pose(this->hmd, pTrackedDevicePoseArray[0]);
++	const uint32_t controller_count = std::min<uint32_t>(MAX_CONTROLLERS, unTrackedDevicePoseArrayCount - 1);
++	for (uint32_t i = 0; i < controller_count; ++i) {
++		write_pose(this->controller[i], pTrackedDevicePoseArray[i + 1]);
++	}
+ }
+ 
+ void
+@@ -1071,4 +1109,4 @@ steamvr_lh_create_devices(struct xrt_prober *xp, struct xrt_system_devices **out
+ 	*out_xsysd = xsysd;
+ 
+ 	return xrt_result::XRT_SUCCESS;
+-}
+\ No newline at end of file
++}

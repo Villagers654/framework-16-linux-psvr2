@@ -7,7 +7,7 @@
   "xrservice_branch": "psvr2-linux-steam-lh",
   "xrservice_cmake_flags": {
     "XRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE": "ON",
-    "XRT_BUILD_DRIVER_PSVR2": "ON",
+    "XRT_BUILD_DRIVER_PSVR2": "OFF",
     "XRT_BUILD_DRIVER_PSSENSE": "ON"
   },
   "opencomposite_path": "@HOME@/.local/share/envision/psvr2-toolkit-monado/opencomposite",

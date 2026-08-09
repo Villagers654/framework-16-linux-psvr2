@@ -64,10 +64,10 @@ created automatically. The setup app writes the active `chaperone_info.vrchap`
 play area file that Monado reads at startup; this is the source of the in-headset
 play boundaries (not another runtime UI).
 
-The boundary importer applies the file's saved standing yaw and translation to
-the raw collision polygon, matching the transform applied to HMD and controller
-poses. The warning wall and tracked devices therefore share the same calibrated
-STAGE coordinates.
+The boundary importer copies Sony's saved collision polygon directly because it
+is already in OpenXR standing/STAGE coordinates. Monado's SteamVR-driver bridge
+applies the saved standing transform to HMD and controller poses, so the warning
+wall and tracked devices share one calibrated coordinate system.
 
 Room Setup alone uses RiftLift xrizer's opt-in
 `RawAndUncalibrated` space, which removes the saved chaperone transform from

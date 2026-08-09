@@ -16,7 +16,12 @@ mkdir -p "$root" "$(dirname "$config")"
 
 monado_patches=(
   "$repo/patches/monado-prefer-psvr2-toolkit.patch"
+  "$repo/patches/monado-runtime-compat.patch"
+  "$repo/patches/monado-steamvr-hmd-tracking.patch"
   "$repo/patches/monado-psvr2-sense.patch"
+  "$repo/patches/monado-steamvr-host-poses.patch"
+  "$repo/patches/monado-openvr-controller-tracking.patch"
+  "$repo/patches/monado-ipc-input-filter.patch"
   "$repo/patches/monado-psvr2-usb-recovery.patch"
   "$repo/patches/monado-spectator-mirror.patch"
   "$repo/patches/monado-stage-bounds.patch"
@@ -73,7 +78,7 @@ elif ! git -C "$root/xrizer" diff --quiet || ! git -C "$root/xrizer" diff --cach
 fi
 git -C "$root/xrizer" remote set-url origin https://github.com/Villagers654/xrizer
 git -C "$root/xrizer" fetch origin main
-git -C "$root/xrizer" checkout --detach bff90cefa5c63da35389aecbcb3bf1a3872d9622
+git -C "$root/xrizer" checkout --detach 7b5f7e5b6d3c134f951a5547f0466880e7458477
 git -C "$root/xrizer" submodule update --init --recursive
 git -C "$root/xrizer" diff --check
 

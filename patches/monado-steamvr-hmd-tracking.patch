@@ -1,0 +1,48 @@
+diff --git a/src/xrt/drivers/steamvr_lh/device.cpp b/src/xrt/drivers/steamvr_lh/device.cpp
+--- a/src/xrt/drivers/steamvr_lh/device.cpp
++++ b/src/xrt/drivers/steamvr_lh/device.cpp
+@@ -377,13 +377,29 @@ HmdDevice::HmdDevice(const DeviceBuilder &builder) : Device(builder)
+ 	this->supported.compositor_info = true;
+ 
+-	inputs_vec = {xrt_input{true, 0, XRT_INPUT_GENERIC_HEAD_POSE, {}}};
++	inputs_vec = {
++	    xrt_input{true, 0, XRT_INPUT_GENERIC_HEAD_POSE, {}},
++	    xrt_input{true, 0, XRT_INPUT_GENERIC_HEAD_DETECT, {}},
++	};
++	inputs_map["/proximity"] = &inputs_vec[1];
+ 	this->inputs = inputs_vec.data();
+ 	this->input_count = inputs_vec.size();
+ 
+-	// Add properties
++	// SteamVR persists these driver properties across vrserver restarts. Restore
++	// Sony's saved play area before Activate() so its tracker can relocalize.
+ 	std::string chap_path = builder.steam_install + "/config/playstation_vr2/chaperone_info.vrchap";
+ 	this->properties.emplace(vr::ETrackedDeviceProperty::Prop_DriverProvidedChaperonePath_String,
+ 	                         Property(vr::k_unStringPropertyTag, (void *)chap_path.c_str(),
+ 	                                  (uint32_t)(chap_path.size() + 1)));
++	{
++		std::ifstream input(chap_path, std::ios::binary);
++		std::string chaperone_json((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
++		if (!chaperone_json.empty()) {
++			this->properties.emplace(
++			    vr::ETrackedDeviceProperty::Prop_DriverProvidedChaperoneJson_String,
++			    Property(vr::k_unStringPropertyTag, chaperone_json.data(),
++			             static_cast<uint32_t>(chaperone_json.size() + 1)));
++			DEV_INFO("Restored persisted driver-provided chaperone JSON from %s", chap_path.c_str());
++		}
++	}
+ 	
+ 	std::string conf_path = builder.steam_install + "/config/playstation_vr2/";
+@@ -1297,7 +1313,11 @@ Device::update_pose(const vr::DriverPose_t &newPose) const
+ 	math_quat_rotate_vec3(&chaperone.orientation, &relation.linear_velocity, &relation.linear_velocity);
+ 	math_quat_rotate_vec3(&chaperone.orientation, &relation.angular_velocity, &relation.angular_velocity);
+ 
+-	const uint64_t ts = chrono_timestamp_ns() + static_cast<uint64_t>(newPose.poseTimeOffset * 1000000.0);
++	const int64_t now_ns = static_cast<int64_t>(chrono_timestamp_ns());
++	const int64_t pose_offset_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
++	                                   std::chrono::duration<double>(newPose.poseTimeOffset))
++	                                   .count();
++	const uint64_t ts = static_cast<uint64_t>(std::max<int64_t>(0, now_ns + pose_offset_ns));
+ 
+ 	m_relation_history_push(relation_hist, &relation, ts);
+ }

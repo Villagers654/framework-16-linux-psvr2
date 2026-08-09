@@ -16,7 +16,9 @@ fi
 # Vulkan, Wine, and Steam state cleanly; the helper escalates only PSVR2-owned
 # launch process groups that ignore SIGTERM.
 [[ ! -x "$game_stop_helper" ]] || "$game_stop_helper" || true
-systemctl --user stop psvr2-fossvr-wayvr.service
+# A concurrent headset-link event may race this stop with a WayVR start. A
+# canceled ancillary-unit job must never abort teardown before the compositor.
+systemctl --user stop psvr2-fossvr-wayvr.service || true
 systemctl --user stop psvr2-chaperone.service || true
 systemctl --user stop --no-block psvr2-fossvr.service
 for _ in $(seq 1 20); do

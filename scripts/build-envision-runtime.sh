@@ -48,13 +48,12 @@ cmake -S "$monado_source" -B "$build_dir" -G Ninja \
   -DXRT_FEATURE_OPENXR=ON \
   -DXRT_FEATURE_SERVICE=ON \
   -DXRT_BUILD_DRIVER_PSSENSE=ON \
-  -DXRT_BUILD_DRIVER_PSVR2=ON \
+  -DXRT_BUILD_DRIVER_PSVR2=OFF \
   -DXRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE=ON
 
 cache="$build_dir/CMakeCache.txt"
 for required in \
   XRT_BUILD_DRIVER_PSSENSE \
-  XRT_BUILD_DRIVER_PSVR2 \
   XRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE \
   XRT_FEATURE_DEBUG_GUI \
   XRT_FEATURE_OPENXR \
@@ -65,6 +64,10 @@ for required in \
     exit 1
   }
 done
+grep -Eq '^XRT_BUILD_DRIVER_PSVR2(:[^=]+)?=OFF$' "$cache" || {
+  echo "Native Monado PSVR2 must be disabled when Toolkit + Ignition is selected" >&2
+  exit 1
+}
 
 LIBRARY_PATH="$brew_prefix/lib" cmake --build "$build_dir"
 cmake --install "$build_dir"
@@ -75,8 +78,8 @@ grep -aFq 'PSVR2 Spectator View' "$service" || {
   echo "Spectator-view patch marker is missing from monado-service." >&2
   exit 1
 }
-nm -C "$service" | grep 't_builder_psvr2_create' >/dev/null || {
-  echo "PSVR2 driver is missing from monado-service." >&2
+nm -C "$service" | grep 'steamvr_open_system' >/dev/null || {
+  echo "SteamVR-driver bridge is missing from monado-service." >&2
   exit 1
 }
 ldd_output=$(ldd "$service")

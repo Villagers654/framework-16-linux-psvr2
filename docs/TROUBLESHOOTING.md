@@ -61,13 +61,14 @@ If startup still loops and logs:
   `XRT_ERROR_DEVICE_CREATION_FAILED`
 
 that means the installed Monado binary was built without PlayStation VR2 support
-enabled. Rebuild with `XRT_BUILD_DRIVER_PSVR2=ON` and restart:
+enabled. For Toolkit + Ignition, keep native Monado PSVR2 disabled as the
+community setup requires, and rebuild the SteamVR-driver bridge:
 
 ```bash
 ./scripts/prepare-envision-runtime.sh
 cd ~/.local/share/envision/psvr2-toolkit-monado/xrservice
 cmake -S . -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado \
-  -DXRT_BUILD_DRIVER_PSVR2=ON -DXRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE=ON -DXRT_BUILD_DRIVER_PSSENSE=ON
+  -DXRT_BUILD_DRIVER_PSVR2=OFF -DXRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE=ON -DXRT_BUILD_DRIVER_PSSENSE=ON
 cmake --build build -j4 && cmake --install build
 systemctl --user restart psvr2-autostart-monitor.service
 ```
@@ -168,9 +169,10 @@ running and `psvr2-chaperone` is enabled in `settings.env`.
 
 If the walls appear to follow the headset or a physically in-bounds headset is
 reported outside, re-run `./install.sh --user` and restart
-`psvr2-chaperone.service`. The importer must transform Sony's raw collision
-vertices with the play area's saved `standing.translation` and `standing.yaw`;
-copying the vertices directly anchors the wall in the wrong tracking universe.
+`psvr2-chaperone.service`. The importer must copy Sony's collision vertices
+directly because they are already in standing/STAGE coordinates. Applying the
+play area's `standing.translation` and `standing.yaw` again double-transforms
+the warning polygon and anchors it in the wrong place.
 
 ## Room Setup UI tracks correctly but passthrough is beside or behind you
 

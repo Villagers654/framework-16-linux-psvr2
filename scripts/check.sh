@@ -56,15 +56,16 @@ with open(sys.argv[1], "rb") as stream:
     points = tomllib.load(stream)["boundary"]
 xs = [point["x"] for point in points]
 zs = [point["z"] for point in points]
-assert math.isclose(min(xs), -3.0, abs_tol=1e-6)
-assert math.isclose(max(xs), -1.0, abs_tol=1e-6)
-assert math.isclose(min(zs), 0.0, abs_tol=1e-6)
-assert math.isclose(max(zs), 2.0, abs_tol=1e-6)
-# A stationary headset at (-2, 1) is inside this transformed 2x2 m room.
+assert math.isclose(min(xs), -1.0, abs_tol=1e-6)
+assert math.isclose(max(xs), 1.0, abs_tol=1e-6)
+assert math.isclose(min(zs), -1.0, abs_tol=1e-6)
+assert math.isclose(max(zs), 1.0, abs_tol=1e-6)
+# The standing transform belongs to device poses; the collision polygon is
+# already in STAGE coordinates and remains centered on (0, 0).
 inside = False
 for first, second in zip(points, points[1:] + points[:1]):
-    if ((first["z"] > 1.0) != (second["z"] > 1.0)) and \
-       (-2.0 < (second["x"] - first["x"]) * (1.0 - first["z"]) /
+    if ((first["z"] > 0.0) != (second["z"] > 0.0)) and \
+       (0.0 < (second["x"] - first["x"]) * (0.0 - first["z"]) /
                (second["z"] - first["z"]) + first["x"]):
         inside = not inside
 assert inside

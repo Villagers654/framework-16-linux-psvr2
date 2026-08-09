@@ -1,0 +1,140 @@
+diff --git a/src/xrt/state_trackers/openvr/interfaces/XRTVRSystem.cpp b/src/xrt/state_trackers/openvr/interfaces/XRTVRSystem.cpp
+index 3aee579c3..13dd3d0e2 100644
+--- a/src/xrt/state_trackers/openvr/interfaces/XRTVRSystem.cpp
++++ b/src/xrt/state_trackers/openvr/interfaces/XRTVRSystem.cpp
+@@ -356,36 +356,77 @@ XRTVRSystem_026::ApplyTransform(vr::TrackedDevicePose_t *pOutputPose,
+                                 const vr::TrackedDevicePose_t *pTrackedDevicePose,
+                                 const vr::HmdMatrix34_t *pTransform)
+ {
+-	openvr_logger logger;
+-	OPENVR_LOGGER_INIT(logger);
+-	OPENVR_LOG_UNIMPLEMENTED(logger, "ApplyTransform(pOutputPose=%p, pTrackedDevicePose=%p, pTransform=%p)",
+-	                         static_cast<void *>(pOutputPose), static_cast<const void *>(pTrackedDevicePose),
+-	                         static_cast<const void *>(pTransform));
++	vr::TrackedDevicePose_t result = *pTrackedDevicePose;
++	const vr::HmdMatrix34_t &device = pTrackedDevicePose->mDeviceToAbsoluteTracking;
++
++	// Compose the tracked device transform with the caller-provided local
++	// transform. The temporary result also makes in-place calls safe.
++	for (int row = 0; row < 3; ++row) {
++		for (int col = 0; col < 3; ++col) {
++			result.mDeviceToAbsoluteTracking.m[row][col] =
++			    device.m[row][0] * pTransform->m[0][col] +
++			    device.m[row][1] * pTransform->m[1][col] +
++			    device.m[row][2] * pTransform->m[2][col];
++		}
++		result.mDeviceToAbsoluteTracking.m[row][3] =
++		    device.m[row][0] * pTransform->m[0][3] + device.m[row][1] * pTransform->m[1][3] +
++		    device.m[row][2] * pTransform->m[2][3] + device.m[row][3];
++	}
+ 
+-	std::memset(pOutputPose, 0, sizeof(*pOutputPose));
++	*pOutputPose = result;
++}
++
++static vr::TrackedDeviceIndex_t
++find_openvr_device_index(Devices &devices, xrt_device *xdev)
++{
++	if (xdev == nullptr) {
++		return vr::k_unTrackedDeviceIndexInvalid;
++	}
++
++	for (vr::TrackedDeviceIndex_t i = 0; i < vr::k_unMaxTrackedDeviceCount; ++i) {
++		auto maybe_device = devices.GetDevice(i);
++		if (maybe_device && (*maybe_device)->xdev == xdev) {
++			return i;
++		}
++	}
++
++	return vr::k_unTrackedDeviceIndexInvalid;
+ }
+ 
+ vr::TrackedDeviceIndex_t
+ XRTVRSystem_026::GetTrackedDeviceIndexForControllerRole(vr::ETrackedControllerRole unDeviceType)
+ {
+-	openvr_logger logger;
+-	OPENVR_LOGGER_INIT(logger);
++	xrt_system_roles roles = XRT_SYSTEM_ROLES_INIT;
++	if (xrt_system_devices_get_roles(this->core->devices->xsysd, &roles) != XRT_SUCCESS) {
++		return vr::k_unTrackedDeviceIndexInvalid;
++	}
++
++	int32_t role_index = -1;
++	if (unDeviceType == vr::TrackedControllerRole_LeftHand) {
++		role_index = roles.left;
++	} else if (unDeviceType == vr::TrackedControllerRole_RightHand) {
++		role_index = roles.right;
++	}
++
++	if (role_index < 0 || static_cast<size_t>(role_index) >= this->core->devices->xsysd->static_xdev_count) {
++		return vr::k_unTrackedDeviceIndexInvalid;
++	}
+ 
+-	OPENVR_LOG_UNIMPLEMENTED_RET(logger, "GetTrackedDeviceIndexForControllerRole(unDeviceType=%d) -> %u",
+-	                             vr::k_unTrackedDeviceIndexInvalid, static_cast<int>(unDeviceType),
+-	                             static_cast<unsigned int>(vr::k_unTrackedDeviceIndexInvalid));
++	return find_openvr_device_index(*this->core->devices,
++	                                this->core->devices->xsysd->static_xdevs[role_index]);
+ }
+ 
+ vr::ETrackedControllerRole
+ XRTVRSystem_026::GetControllerRoleForTrackedDeviceIndex(vr::TrackedDeviceIndex_t unDeviceIndex)
+ {
+-	openvr_logger logger;
+-	OPENVR_LOGGER_INIT(logger);
++	if (unDeviceIndex == this->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_LeftHand)) {
++		return vr::TrackedControllerRole_LeftHand;
++	}
++	if (unDeviceIndex == this->GetTrackedDeviceIndexForControllerRole(vr::TrackedControllerRole_RightHand)) {
++		return vr::TrackedControllerRole_RightHand;
++	}
+ 
+-	OPENVR_LOG_UNIMPLEMENTED_RET(logger, "GetControllerRoleForTrackedDeviceIndex(unDeviceIndex=%u) -> %d",
+-	                             vr::ETrackedControllerRole::TrackedControllerRole_Invalid,
+-	                             static_cast<unsigned int>(unDeviceIndex),
+-	                             static_cast<int>(vr::ETrackedControllerRole::TrackedControllerRole_Invalid));
++	return vr::TrackedControllerRole_Invalid;
+ }
+ 
+ /* Property methods */
+diff --git a/src/xrt/state_trackers/openvr/openvr_devices.cpp b/src/xrt/state_trackers/openvr/openvr_devices.cpp
+index d06bd89a8..b9177a18a 100644
+--- a/src/xrt/state_trackers/openvr/openvr_devices.cpp
++++ b/src/xrt/state_trackers/openvr/openvr_devices.cpp
+@@ -42,8 +42,14 @@ Device::Device(openvr_logger &logger, Devices &devices, xrt_device *xdev) : xdev
+ 		case XRT_DEVICE_TYPE_GAMEPAD:
+ 		case XRT_DEVICE_TYPE_LEFT_HAND_CONTROLLER:
+ 		case XRT_DEVICE_TYPE_RIGHT_HAND_CONTROLLER:
+-		case XRT_DEVICE_TYPE_ANY_HAND_CONTROLLER: tracked_class = vr::TrackedDeviceClass_Controller; break;
+-		case XRT_DEVICE_TYPE_GENERIC_TRACKER: tracked_class = vr::TrackedDeviceClass_GenericTracker; break;
++		case XRT_DEVICE_TYPE_ANY_HAND_CONTROLLER:
++			tracked_class = vr::TrackedDeviceClass_Controller;
++			input_name = XRT_INPUT_GENERIC_GRIP_POSE;
++			break;
++		case XRT_DEVICE_TYPE_GENERIC_TRACKER:
++			tracked_class = vr::TrackedDeviceClass_GenericTracker;
++			input_name = XRT_INPUT_GENERIC_TRACKER_POSE;
++			break;
+ 		default: tracked_class = vr::TrackedDeviceClass_Invalid; break;
+ 		}
+ 
+@@ -96,6 +102,19 @@ Devices::Devices(openvr_logger &logger,
+ 	// Unconditionally initialize the head device slot to the head static role.
+ 	this->AddDevice(logger, vr::k_unTrackedDeviceIndex_Hmd, xsysd->static_roles.head);
+ 
++	// OpenVR reserves slot zero for the HMD. Populate the remaining slots with
++	// every other device exposed by the Monado system so controller role and
++	// pose queries can resolve to real tracked devices.
++	vr::TrackedDeviceIndex_t openvr_index = 1;
++	for (size_t i = 0; i < xsysd->static_xdev_count && openvr_index < vr::k_unMaxTrackedDeviceCount; ++i) {
++		xrt_device *xdev = xsysd->static_xdevs[i];
++		if (xdev == nullptr || xdev == xsysd->static_roles.head) {
++			continue;
++		}
++
++		this->AddDevice(logger, openvr_index++, xdev);
++	}
++
+ 	xrt_space *seated = xso->semantic.local;
+ 	if (seated == nullptr) {
+ 		seated = xso->semantic.root;

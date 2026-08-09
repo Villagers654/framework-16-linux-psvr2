@@ -1,0 +1,113 @@
+diff --git a/src/xrt/drivers/steamvr_lh/device.cpp b/src/xrt/drivers/steamvr_lh/device.cpp
+index df99d97dd..32d519fd4 100644
+--- a/src/xrt/drivers/steamvr_lh/device.cpp
++++ b/src/xrt/drivers/steamvr_lh/device.cpp
+@@ -39,6 +39,8 @@
+ #include <cmath>
+ #include <functional>
+ #include <cstring>
++#include <filesystem>
++#include <fstream>
+ #include <numbers>
+ #include <openvr_driver.h>
+ #include <string>
+@@ -1361,6 +1363,35 @@ parse_profile(std::string_view path)
+ vr::ETrackedPropertyError
+ Device::handle_generic_property_write(const vr::PropertyWrite_t &prop)
+ {
++	if (prop.prop == vr::Prop_DriverProvidedChaperoneJson_String &&
++	    prop.writeType == vr::EPropertyWriteType::PropertyWrite_Set && prop.pvBuffer != nullptr &&
++	    prop.unBufferSize > 1) {
++		auto path_property = properties.find(vr::Prop_DriverProvidedChaperonePath_String);
++		if (path_property != properties.end() && !path_property->second.buffer.empty()) {
++			const auto &buffer = path_property->second.buffer;
++			const auto length = strnlen(reinterpret_cast<const char *>(buffer.data()), buffer.size());
++			const std::filesystem::path path{
++			    std::string(reinterpret_cast<const char *>(buffer.data()), length)};
++			const std::filesystem::path temporary = path.string() + ".tmp";
++			try {
++				std::filesystem::create_directories(path.parent_path());
++				std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
++				output.write(static_cast<const char *>(prop.pvBuffer), prop.unBufferSize - 1);
++				output.close();
++				if (!output) {
++					throw std::runtime_error("write failed");
++				}
++				std::filesystem::rename(temporary, path);
++				DEV_INFO("Persisted driver-provided chaperone JSON to %s", path.c_str());
++			} catch (const std::exception &error) {
++				DEV_WARN("Could not persist driver-provided chaperone JSON to %s: %s", path.c_str(),
++				         error.what());
++				std::error_code ignored;
++				std::filesystem::remove(temporary, ignored);
++			}
++		}
++	}
++
+ 	switch (prop.writeType) {
+ 	case vr::EPropertyWriteType::PropertyWrite_Set:
+ 		if (properties.count(prop.prop) > 0) {
+diff --git a/src/xrt/state_trackers/oxr/oxr_api_instance.c b/src/xrt/state_trackers/oxr/oxr_api_instance.c
+index 712344bd5..c10f22afd 100644
+--- a/src/xrt/state_trackers/oxr/oxr_api_instance.c
++++ b/src/xrt/state_trackers/oxr/oxr_api_instance.c
+@@ -10,6 +10,8 @@
+ 
+ #include "xrt/xrt_compiler.h"
+ 
++#include "os/os_time.h"
++
+ #include "util/u_debug.h"
+ #include "util/u_trace_marker.h"
+ 
+@@ -35,6 +37,7 @@
+ #include <string.h>
+ 
+ DEBUG_GET_ONCE_BOOL_OPTION(ignore_openxr_version, "OXR_IGNORE_OPENXR_VERSION", false)
++DEBUG_GET_ONCE_BOOL_OPTION(zero_time_is_now, "OXR_ZERO_TIME_IS_NOW", false)
+ 
+ #define MAKE_EXTENSION_PROPERTIES(mixed_case, all_caps)                                                                \
+ 	{XR_TYPE_EXTENSION_PROPERTIES, NULL, XR_##all_caps##_EXTENSION_NAME, XR_##mixed_case##_SPEC_VERSION},
+@@ -465,6 +468,10 @@ oxr_xrConvertTimeToTimespecTimeKHR(XrInstance instance, XrTime time, struct time
+ 	OXR_VERIFY_EXTENSION(&log, inst, KHR_convert_timespec_time);
+ 	OXR_VERIFY_ARG_NOT_NULL(&log, timespecTime);
+ 
++	if (time <= (XrTime)0 && debug_get_bool_option_zero_time_is_now()) {
++		time = (XrTime)os_monotonic_get_ns();
++	}
++
+ 	if (time <= (XrTime)0) {
+ 		return oxr_error(&log, XR_ERROR_TIME_INVALID, "(time == %" PRIi64 ") is not a valid time.", time);
+ 	}
+diff --git a/src/xrt/state_trackers/oxr/oxr_api_space.c b/src/xrt/state_trackers/oxr/oxr_api_space.c
+index 8526b6644..3efff8bf8 100644
+--- a/src/xrt/state_trackers/oxr/oxr_api_space.c
++++ b/src/xrt/state_trackers/oxr/oxr_api_space.c
+@@ -8,6 +8,7 @@
+  */
+ 
+ #include "openxr/openxr.h"
++#include "os/os_time.h"
+ #include "oxr_chain.h"
+ #include "util/u_misc.h"
+ #include "xrt/xrt_compiler.h"
+@@ -29,6 +30,8 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
++DEBUG_GET_ONCE_BOOL_OPTION(zero_time_is_now, "OXR_ZERO_TIME_IS_NOW", false)
++
+ 
+ /*
+  *
+@@ -232,6 +235,10 @@ oxr_xrLocateSpace(XrSpace space, XrSpace baseSpace, XrTime time, XrSpaceLocation
+ 	OXR_VERIFY_SPACE_NOT_NULL(&log, baseSpace, baseSpc);
+ 	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, location, XR_TYPE_SPACE_LOCATION);
+ 
++	if (time <= (XrTime)0 && debug_get_bool_option_zero_time_is_now()) {
++		time = (XrTime)os_monotonic_get_ns();
++	}
++
+ 	if (time <= (XrTime)0) {
+ 		return oxr_error(&log, XR_ERROR_TIME_INVALID, "(time == %" PRIi64 ") is not a valid time.", time);
+ 	}
