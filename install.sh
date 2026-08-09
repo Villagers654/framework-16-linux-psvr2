@@ -179,6 +179,7 @@ if [[ "$mode" == user ]]; then
     sed -i -e '/^PSVR2_SPECTATOR_ENABLE=/d' \
         -e '/^PSVR2_LOAD_PSVR2_SENSE=/d' \
         -e '/^PSVR2_REFRESH_RATE=/d' \
+        -e '/^PSVR2_USB_RECOVERY_COOLDOWN_SECONDS=/d' \
         "$HOME/.config/psvr2-linux/settings.env"
     chmod 0600 "$HOME/.config/psvr2-linux/settings.env"
 
@@ -220,10 +221,10 @@ fi
 
 [[ ${EUID} -eq 0 ]] || { echo "Run --system with sudo." >&2; exit 1; }
 install -m 0644 "$repo_dir/udev/70-psvr2.rules" /etc/udev/rules.d/70-psvr2.rules
-install -d -m 0755 /usr/local/libexec /etc/polkit-1/rules.d
-install -m 0755 "$repo_dir/systemd/system/psvr2-usb-recover" /usr/local/libexec/
-install -m 0644 "$repo_dir/systemd/system/psvr2-usb-recover.service" /etc/systemd/system/
-install -m 0644 "$repo_dir/polkit/49-psvr2-usb-recover.rules" /etc/polkit-1/rules.d/
+install -d -m 0755 /usr/local/libexec
+rm -f -- /etc/systemd/system/psvr2-usb-recover.service \
+    /etc/polkit-1/rules.d/49-psvr2-usb-recover.rules \
+    /usr/local/libexec/psvr2-usb-recover
 if $framework; then
     mapfile -t dgpus < <(lspci -Dn | awk '$3 == "1002:7480" {
         address=$1

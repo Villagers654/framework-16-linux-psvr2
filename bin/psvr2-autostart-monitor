@@ -18,7 +18,6 @@ startup_retry_attempts=${PSVR2_STARTUP_RETRY_ATTEMPTS:-3}
 runtime_failure_streak_threshold=${PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD:-2}
 runtime_recovery_cooldown=${PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS:-90}
 runtime_retry_cooldown=${PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS:-$runtime_recovery_cooldown}
-usb_recovery_cooldown=${PSVR2_USB_RECOVERY_COOLDOWN_SECONDS:-8}
 required_usb_interfaces=${PSVR2_USB_INTERFACE_MINIMUM:-11}
 suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 game_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-game-active"
@@ -265,19 +264,11 @@ full_recovery_cycle() {
     [[ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc" ]] && rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc"
     systemctl --user stop monado.service monado.socket 2>/dev/null || true
     if [[ "$recover_usb" == 1 && "${PSVR2_TEST_MODE:-0}" != "1" ]]; then
-        echo "Resetting the wedged PSVR2 USB function before retrying"
-        if ! systemctl start psvr2-usb-recover.service; then
-            echo "PSVR2 USB recovery service failed; continuing with a software-only retry" >&2
-        fi
-    else
-        sleep 3
+        echo "PSVR2 USB did not wake cleanly; power-cycle the headset if the software retry fails" >&2
     fi
+    sleep 3
     clear_runtime_failure_state
-    if [[ "$recover_usb" == 1 ]]; then
-        set_runtime_cooldown "$usb_recovery_cooldown"
-    else
-        set_runtime_cooldown "$runtime_retry_cooldown"
-    fi
+    set_runtime_cooldown "$runtime_retry_cooldown"
 }
 
 start_runtime() {
@@ -319,7 +310,7 @@ start_runtime() {
         echo "PSVR2 runtime was not healthy; retrying after cleanup" >&2
         if runtime_failure_log_contains_usb_wake_failure "$failure_since"; then
             full_recovery_cycle 1
-            next_retry=$((SECONDS + usb_recovery_cooldown))
+            next_retry=$((SECONDS + runtime_retry_cooldown))
             return 1
         fi
         if runtime_failure_log_contains_critical_failure 220 "$failure_since"; then
