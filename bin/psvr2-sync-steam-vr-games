@@ -21,6 +21,7 @@ if CONFIG.exists():
     if match:
         STEAM = Path(os.path.expandvars(match.group(1))).expanduser()
 STATE = HOME / ".local/share/psvr2-setup/steam-vr-apps.json"
+VR_MANIFEST = STEAM / "config/steamapps.vrmanifest"
 WRAPPER = str(HOME / ".local/bin/psvr2-fossvr-run")
 FORCE_VR_IDS = ""
 MANAGE_LAUNCH_OPTIONS = True
@@ -88,6 +89,37 @@ def installed_apps() -> dict[str, str]:
     for root in sorted(roots):
         apps.update(parse_root(root))
     return apps
+
+def registered_vr_apps(installed: dict[str, str]) -> dict[str, str]:
+    """Return Steam and non-Steam VR entries that are currently launchable."""
+    try:
+        payload = json.loads(VR_MANIFEST.read_text(errors="strict"))
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+
+    result: dict[str, str] = {}
+    for entry in payload.get("applications", []):
+        if not isinstance(entry, dict):
+            continue
+        match = re.fullmatch(r"steam[.]app[.](\d+)", str(entry.get("app_key", "")))
+        if not match:
+            continue
+        appid = match.group(1)
+        strings = entry.get("strings", {})
+        localized = strings.get("en_us", {}) if isinstance(strings, dict) else {}
+        name = localized.get("name", installed.get(appid, appid)) if isinstance(localized, dict) else installed.get(appid, appid)
+
+        # Normal Steam games remain authoritative through their appmanifest.
+        # For non-Steam entries, require Steam's generated Linux launcher to
+        # still exist so deleted shortcuts do not linger in WayVR.
+        if appid not in installed:
+            if entry.get("launch_type") != "binary":
+                continue
+            binary = Path(os.path.expandvars(str(entry.get("binary_path_linux", "")))).expanduser()
+            if not binary.is_file():
+                continue
+        result[appid] = str(name)
+    return result
 
 def store_says_vr(appid: str) -> bool:
     url = f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=us&l=english"
@@ -222,6 +254,8 @@ def main() -> int:
     args = parser.parse_args()
 
     apps = installed_apps()
+    registered_vr = registered_vr_apps(apps)
+    apps.update({appid: name for appid, name in registered_vr.items() if appid not in apps})
     cache = dict(KNOWN)
     try:
         saved = json.loads(STATE.read_text())
@@ -229,6 +263,11 @@ def main() -> int:
             cache.update({str(key): value for key, value in saved.items() if isinstance(value, bool)})
     except (FileNotFoundError, json.JSONDecodeError):
         pass
+
+    # Steam's VR manifest is definitive for both native Steam VR titles and
+    # explicitly registered non-Steam launchers such as Revive games.
+    for appid in registered_vr:
+        cache[appid] = True
 
     # Query new manifests once. Re-query cached negatives only when explicitly
     # requested; normal startup must not depend on dozens of network requests.
@@ -268,13 +307,16 @@ def main() -> int:
 
     # Persist a deterministic cache for WayVR so startup behavior does not depend
     # on how long Steam has had to settle after installation or launch.
-    STATE.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(cache, indent=2, sort_keys=True) + "\n"
-    with tempfile.NamedTemporaryFile("w", dir=STATE.parent, delete=False) as output:
-        output.write(payload)
-        temporary = Path(output.name)
-    temporary.chmod(0o644)
-    os.replace(temporary, STATE)
+    previous_payload = STATE.read_text(errors="replace") if STATE.exists() else ""
+    state_changed = payload != previous_payload
+    if state_changed:
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile("w", dir=STATE.parent, delete=False) as output:
+            output.write(payload)
+            temporary = Path(output.name)
+        temporary.chmod(0o644)
+        os.replace(temporary, STATE)
 
     print(f"PSVR2: synced {len(cache)} steam ids, {sum(1 for v in cache.values() if v)} vr-enabled")
 
@@ -296,7 +338,7 @@ def main() -> int:
     else:
         print("PSVR2: Steam is running; launch options were not changed (use --force to override).")
 
-    if not args.no_restart_dashboard:
+    if state_changed and not args.no_restart_dashboard:
         restart_wayvr_dashboard()
     patch_ktane_settings(KTANE_SETTINGS)
     return 0

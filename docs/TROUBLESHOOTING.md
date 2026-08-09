@@ -203,8 +203,10 @@ off) while leaving the global 120 Hz / 170% PSVR2 target unchanged.
 
 ## Games do not appear in WayVR's Games tab after installation
 
-This cache is refreshed automatically from Steam manifest changes and is now
-self-healing when a previously-known non-VR entry is later reclassified.
+This cache is refreshed automatically from Steam app manifests and every 30
+seconds from Steam's VR manifest. The latter also covers registered non-Steam
+launchers such as Revive games. WayVR reloads only when the resulting library
+changes.
 
 If you installed new titles while already in VR and one is missing, run a non-
 intrusive refresh:
@@ -213,12 +215,10 @@ intrusive refresh:
 psvr2-sync-steam-vr-games --discovery-only
 ```
 
-The sync now re-checks all installed entries that aren't already confirmed VR and
-rebuilds stale IDs, so missing titles can recover automatically. Running this
-while WayVR is active refreshes the dashboard state automatically, so titles
-should appear on the next startup of the menu.
+The sync re-checks new installed entries and imports launchable binary entries
+from `steamapps.vrmanifest`. Running it while WayVR is active refreshes the
+dashboard automatically when the cache changes.
 
-```bash
 If a title still does not show in the Games tab, restart Monado/WayVR (`psvr2-fossvr-stop`
 then `psvr2-fossvr-start`) so WayVR reloads the cache once with a clean runtime.
 

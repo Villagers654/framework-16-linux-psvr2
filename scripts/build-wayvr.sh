@@ -16,16 +16,35 @@ if [[ ! -d "$source_dir/.git" ]]; then
   git clone https://github.com/wayvr-org/wayvr "$source_dir"
 fi
 git -C "$source_dir" fetch origin
-git -C "$source_dir" checkout --detach d93b74cc8aa01ea17d72d46ce016e47286409f92
-if git -C "$source_dir" apply --check "$repo/patches/wayvr-psvr2-dashboard.patch" 2>/dev/null; then
-  git -C "$source_dir" apply "$repo/patches/wayvr-psvr2-dashboard.patch"
-elif git -C "$source_dir" apply --reverse --check \
-  "$repo/patches/wayvr-psvr2-dashboard.patch" 2>/dev/null; then
-  echo "WayVR patch is already applied."
-else
-  echo "WayVR patch does not apply cleanly to the pinned source." >&2
+patches=(
+  "$repo/patches/wayvr-psvr2-dashboard.patch"
+  "$repo/patches/wayvr-nonsteam-vr-library.patch"
+)
+
+# Normalize only changes owned by this repository. Reverse in dependency order
+# so an already-patched source can be rebuilt without a destructive hard reset.
+for ((index=${#patches[@]} - 1; index >= 0; index--)); do
+  patch=${patches[index]}
+  if git -C "$source_dir" apply --reverse --check "$patch" 2>/dev/null; then
+    git -C "$source_dir" apply --reverse "$patch"
+  fi
+done
+if ! git -C "$source_dir" diff --quiet; then
+  echo "WayVR source contains unmanaged changes; refusing to overwrite them." >&2
+  git -C "$source_dir" status --short >&2
   exit 1
 fi
+git -C "$source_dir" checkout --detach d93b74cc8aa01ea17d72d46ce016e47286409f92
+for patch in "${patches[@]}"; do
+  if git -C "$source_dir" apply --check "$patch" 2>/dev/null; then
+    git -C "$source_dir" apply "$patch"
+  elif git -C "$source_dir" apply --reverse --check "$patch" 2>/dev/null; then
+    echo "WayVR patch is already applied: $(basename "$patch")"
+  else
+    echo "WayVR patch does not apply cleanly: $patch" >&2
+    exit 1
+  fi
+done
 git -C "$source_dir" diff --check
 
 brew_prefix=$(brew --prefix)

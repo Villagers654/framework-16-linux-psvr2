@@ -1,0 +1,93 @@
+diff --git a/dash-frontend/src/util/steam_utils.rs b/dash-frontend/src/util/steam_utils.rs
+--- a/dash-frontend/src/util/steam_utils.rs
++++ b/dash-frontend/src/util/steam_utils.rs
+@@ -133,6 +133,53 @@ fn app_manifest_from_raw(app_id: AppID, raw: &str) -> Option<AppManifest> {
+ 	})
+ }
+ 
++fn registered_nonsteam_vr_apps(steam_root: &Path) -> Vec<AppManifest> {
++	let path = steam_root.join("config/steamapps.vrmanifest");
++	let Ok(raw) = std::fs::read_to_string(path) else {
++		return Vec::new();
++	};
++	let Ok(payload) = serde_json::from_str::<serde_json::Value>(&raw) else {
++		return Vec::new();
++	};
++	let Some(applications) = payload.get("applications").and_then(|value| value.as_array()) else {
++		return Vec::new();
++	};
++
++	applications
++		.iter()
++		.filter_map(|entry| {
++			if entry.get("launch_type")?.as_str()? != "binary" {
++				return None;
++			}
++			let app_id = entry.get("app_key")?.as_str()?.strip_prefix("steam.app.")?;
++			if !app_id.chars().all(|value| value.is_ascii_digit()) {
++				return None;
++			}
++			let binary = entry.get("binary_path_linux")?.as_str()?;
++			if !Path::new(binary).is_file() {
++				return None;
++			}
++			let name = entry
++				.get("strings")?
++				.get("en_us")?
++				.get("name")?
++				.as_str()?
++				.to_string();
++			let last_played = entry
++				.get("last_played_time")
++				.and_then(|value| value.as_str())
++				.and_then(|value| value.parse::<u64>().ok());
++			Some(AppManifest {
++				app_id: app_id.into(),
++				run_game_id: app_id.into(),
++				name,
++				raw_state_flags: 4,
++				last_played,
++			})
++		})
++		.collect()
++}
++
+ fn vdf_parse_libraryfolders<'a>(vdf_root: &'a Vdf<'a>) -> Option<Vec<AppEntry>> {
+ 	let obj_libraryfolders = vdf_root.value.get_obj()?;
+ 
+@@ -217,6 +264,14 @@ pub fn launch(app_id: &AppID) -> anyhow::Result<()> {
+ 			.spawn()?;
+ 		return Ok(());
+ 	}
++	if let Ok(steam_root) = get_steam_root()
++		&& registered_nonsteam_vr_apps(&steam_root)
++			.iter()
++			.any(|manifest| manifest.app_id == *app_id)
++	{
++		call_steam(&format!("steam://rungameid/{}", app_id))?;
++		return Ok(());
++	}
+ 	call_steam(&format!("steam://launch/{}/vr", app_id))?;
+ 	Ok(())
+ }
+@@ -448,10 +503,16 @@ impl SteamUtils {
+ 
+ 		let vr_cache_path = PathBuf::from(std::env::var("HOME")?)
+ 			.join(".local/share/psvr2-setup/steam-vr-apps.json");
+-		if let Ok(raw) = std::fs::read_to_string(vr_cache_path)
+-			&& let Ok(vr_apps) = serde_json::from_str::<HashMap<AppID, bool>>(&raw)
+-		{
+-			games.retain(|game| vr_apps.get(&game.app_id).copied().unwrap_or(false));
++		let vr_apps = std::fs::read_to_string(vr_cache_path)
++			.ok()
++			.and_then(|raw| serde_json::from_str::<HashMap<AppID, bool>>(&raw).ok())
++			.unwrap_or_default();
++		games.retain(|game| vr_apps.get(&game.app_id).copied().unwrap_or(false));
++
++		for manifest in registered_nonsteam_vr_apps(&self.steam_root) {
++			if vr_apps.get(&manifest.app_id).copied().unwrap_or(false) && seen.insert(manifest.app_id.clone()) {
++				games.push(manifest);
++			}
+ 		}
+ 
+ 		games.push(AppManifest {

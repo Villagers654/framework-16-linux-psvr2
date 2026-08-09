@@ -71,14 +71,34 @@ cat > "$steam/config/config.vdf" <<'EOF'
 }
 EOF
 
+local_vr_launcher="$test_home/Vader Immortal.sh"
+install -m 0755 /dev/null "$local_vr_launcher"
+cat > "$steam/config/steamapps.vrmanifest" <<EOF
+{
+  "applications": [
+    {
+      "app_key": "steam.app.2600304528",
+      "launch_type": "binary",
+      "strings": {"en_us": {"name": "Vader Immortal: Episode I"}},
+      "binary_path_linux": "$local_vr_launcher"
+    }
+  ]
+}
+EOF
+
 HOME="$test_home" PSVR2_SYNC_RESTART_DASHBOARD=0 \
   python3 "$repo/bin/psvr2-sync-steam-vr-games" --force
 
 state="$test_home/.local/share/psvr2-setup/steam-vr-apps.json"
-jq -e '."341800" == true and ."250820" == false' "$state" >/dev/null
+jq -e '."341800" == true and ."250820" == false and ."2600304528" == true' "$state" >/dev/null
 grep -Fq "$test_home/.local/bin/psvr2-fossvr-run %command%" \
   "$steam/userdata/1/config/localconfig.vdf"
 grep -Fq '"name"		"proton_experimental"' "$steam/config/config.vdf"
 test -f "$steam/userdata/1/config/localconfig.vdf.psvr2-auto-backup"
 test -f "$steam/config/config.vdf.psvr2-auto-backup"
+state_mtime=$(stat -c '%Y' "$state")
+sleep 1
+HOME="$test_home" PSVR2_SYNC_RESTART_DASHBOARD=0 \
+  python3 "$repo/bin/psvr2-sync-steam-vr-games" --discovery-only
+test "$(stat -c '%Y' "$state")" = "$state_mtime"
 echo "Steam metadata sync test passed."

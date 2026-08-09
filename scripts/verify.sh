@@ -40,6 +40,7 @@ check grep -aFq 'Raw tracking space removes PSVR2 chaperone' "$HOME/.local/share
 check grep -Fq 'XRIZER_FORCE_RAW_TRACKING_SPACE=1' "$HOME/.local/bin/psvr2-room-setup"
 check grep -Fq 'PSVR2 play area saved' "$HOME/.local/bin/psvr2-room-setup"
 check grep -Fq 'psvr2-room-setup.service' "$repo/patches/wayvr-psvr2-dashboard.patch"
+check grep -Fq 'registered_nonsteam_vr_apps' "$repo/patches/wayvr-nonsteam-vr-library.patch"
 check bash -c 'bash "$1"' _ "$repo/scripts/verify-haptics.sh"
 check bash -c 'getcap "$1" | grep -Fq "cap_sys_nice=eip"' _ \
     "$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
@@ -51,6 +52,7 @@ check grep -aFq 'PSVR2 Spectator View' "$HOME/.local/share/envision/prefixes/psv
 check python3 -m json.tool "$HOME/.local/share/psvr2-setup/unity-setup/PSVR2Toolkit.UnitySetup_Data/StreamingAssets/SteamVR/bindings_oculus_touch.json" >/dev/null
 check systemctl --user is-enabled --quiet psvr2-autostart-monitor.service
 check systemctl --user is-enabled --quiet psvr2-steam-vr-sync.path
+check systemctl --user is-enabled --quiet psvr2-steam-vr-sync.timer
 check grep -aFq 'PSVR2 Room Setup' "$HOME/.local/share/psvr2-setup/wayvr/wayvr"
 lsusb -d 054c:0cde >/dev/null || echo 'WARN PSVR2 adapter is not currently connected'
 exit "$failed"

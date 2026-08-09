@@ -43,6 +43,7 @@ user_units=(
     psvr2-room-setup.service
     psvr2-steam-vr-sync.path
     psvr2-steam-vr-sync.service
+    psvr2-steam-vr-sync.timer
 )
 legacy_units=(
     psvr2-steamvr-bridge.path
@@ -68,7 +69,8 @@ legacy_desktops=(
 uninstall_user() {
     [[ ${EUID} -ne 0 ]] || { echo "Run --uninstall-user as your normal account." >&2; exit 1; }
     systemctl --user disable --now psvr2-autostart-monitor.service \
-        psvr2-steam-vr-sync.path "${legacy_units[@]}" 2>/dev/null || true
+        psvr2-steam-vr-sync.path psvr2-steam-vr-sync.timer \
+        "${legacy_units[@]}" 2>/dev/null || true
     systemctl --user stop psvr2-fossvr-wayvr.service psvr2-chaperone.service \
         psvr2-fossvr.service 2>/dev/null || true
 
@@ -200,7 +202,8 @@ if [[ "$mode" == user ]]; then
 
     systemctl --user daemon-reload
     systemctl --user disable --now "${legacy_units[@]}" 2>/dev/null || true
-    systemctl --user enable psvr2-autostart-monitor.service psvr2-steam-vr-sync.path
+    systemctl --user enable psvr2-autostart-monitor.service \
+        psvr2-steam-vr-sync.path psvr2-steam-vr-sync.timer
     update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
     echo "User integration installed. Review ~/.config/psvr2-linux/settings.env."
     exit 0
