@@ -7,7 +7,8 @@ trap 'find "$workspace" -depth -delete' EXIT
 test_home="$workspace/home"
 steam="$test_home/Steam"
 install -d -m 0755 "$test_home/.config/psvr2-linux" \
-  "$steam/steamapps" "$steam/config" "$steam/userdata/1/config"
+  "$test_home/.local/bin" "$steam/steamapps" "$steam/config" "$steam/userdata/1/config"
+install -m 0755 /dev/null "$test_home/.local/bin/psvr2-fossvr-run"
 
 cat > "$test_home/.config/psvr2-linux/settings.env" <<EOF
 STEAM_ROOT="$steam"
@@ -91,8 +92,9 @@ HOME="$test_home" PSVR2_SYNC_RESTART_DASHBOARD=0 \
 
 state="$test_home/.local/share/psvr2-setup/steam-vr-apps.json"
 jq -e '."341800" == true and ."250820" == false and ."2600304528" == true' "$state" >/dev/null
+expected_command="$test_home/.local/bin/psvr2-fossvr-run '$local_vr_launcher'"
 test "$(HOME="$test_home" python3 "$repo/bin/psvr2-launch-registered-vr" --check 2600304528)" = \
-  "$local_vr_launcher"
+  "$expected_command"
 grep -Fq "$test_home/.local/bin/psvr2-fossvr-run %command%" \
   "$steam/userdata/1/config/localconfig.vdf"
 grep -Fq '"name"		"proton_experimental"' "$steam/config/config.vdf"

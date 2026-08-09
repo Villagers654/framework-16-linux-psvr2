@@ -73,11 +73,16 @@ def main() -> int:
     ) as error:
         print(f"PSVR2 registered VR launch failed: {error}", file=sys.stderr)
         return 1
+    wrapper = Path.home() / ".local/bin/psvr2-fossvr-run"
+    if not wrapper.is_file() or not os.access(wrapper, os.X_OK):
+        print(f"PSVR2 game wrapper is missing or not executable: {wrapper}", file=sys.stderr)
+        return 1
+    command = [str(wrapper), str(binary), *arguments]
     if args.check:
-        print(binary)
+        print(shlex.join(command))
         return 0
     os.chdir(working)
-    os.execv(binary, [str(binary), *arguments])
+    os.execv(wrapper, command)
     return 1
 
 
