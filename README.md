@@ -27,9 +27,10 @@ PSVR2. Per-game Steam resolution overrides remain available.
 | Component | Scope | Why |
 |---|---|---|
 | PSVR2 Toolkit + Ignition | **Linux PSVR2** | Runs Sony's SteamVR driver through Proton and exposes it to Linux VR runtimes. |
-| Supremium Monado + xrizer | **Linux PSVR2** | Supplies OpenXR and translates OpenVR games without relying on SteamVR's compositor. |
+| Supremium Monado + RiftLift xrizer | **Linux PSVR2** | Supplies OpenXR and translates OpenVR games without relying on SteamVR's compositor. |
 | WayVR launcher patches | **Linux PSVR2** | Opens a VR-only game grid, launches explicit VR modes, and binds native Sense controls. |
 | xr-chaperone | **Linux OpenXR** | Provides Oculus-style visual boundary warnings from your PSVR2 play area in a separate overlay process. |
+| [RiftLift](https://github.com/Villagers654/RiftLift) | **Optional Meta Rift games** | Installs and launches owned Rift titles through maintained ReviveXR and Monado integration. |
 | `bluetooth.disable_ertm=1` | **Linux / controller-specific** | Compatibility workaround for Sense Bluetooth pairing; try without it first on current kernels. |
 | `amdgpu.dcdebugmask=0xc10` | **AMD-specific, experimental** | The exact setting used on the tested machine to stabilize direct-display/DRM behavior. Do not apply on Intel/NVIDIA. |
 | AMD VR power profile service | **AMD-specific** | Prevents between-frame dGPU downclocking and runtime suspend while PSVR2 is connected. |
@@ -198,7 +199,7 @@ the manual launcher when you want VR again.
 - `systemd/user/` – Monado, WayVR, Steam-library sync, and connection-monitor units
 - `systemd/system/` – optional AMD dGPU power guard
 - `udev/` – PSVR2 permissions and conditional AMD power hooks
-- `patches/` – exact Monado, xrizer, and WayVR source changes
+- `patches/` – exact PSVR2-specific Monado and WayVR source changes
 - `config/` – settings and Envision/WayVR configuration templates
 - `desktop/` – GNOME application launchers
 - `scripts/` – downloads, source preparation, build, and verification
@@ -212,7 +213,7 @@ the manual launcher when you want VR again.
 | Ignition | `v1.0.0` |
 | PSVR2Toolkit.UnitySetup | `v1.1.0` |
 | Supremium Monado branch | `psvr2-linux-steam-lh` at `8bd01e7edec8028f65c7bff925195f0454d4bc9f` |
-| xrizer | `6c3e45f4c18b014a7aba87282ee0677306315052` |
+| [RiftLift xrizer](https://github.com/Villagers654/xrizer) | `bff90cefa5c63da35389aecbcb3bf1a3872d9622` |
 | WayVR | `d93b74cc8aa01ea17d72d46ce016e47286409f92` (26.7.1) |
 | xr-chaperone | `a0351bd00f208e9f7c7917d413de2accbf9208eb` |
 

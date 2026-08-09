@@ -21,13 +21,6 @@ monado_patches=(
   "$repo/patches/monado-spectator-mirror.patch"
   "$repo/patches/monado-stage-bounds.patch"
 )
-xrizer_patches=(
-  "$repo/patches/xrizer-linux-room-setup.patch"
-  "$repo/patches/xrizer-chaperone-bounds.patch"
-  "$repo/patches/xrizer-linux-room-setup-tracking-guard.patch"
-  "$repo/patches/xrizer-room-setup-proximity.patch"
-)
-
 unapply_managed_patches() {
   local tree=$1
   shift
@@ -67,15 +60,21 @@ done
 git -C "$root/xrservice" diff --check
 
 if [[ ! -d "$root/xrizer/.git" ]]; then
-  git clone --recurse-submodules https://github.com/Supreeeme/xrizer "$root/xrizer"
+  git clone --recurse-submodules https://github.com/Villagers654/xrizer "$root/xrizer"
 fi
-unapply_managed_patches "$root/xrizer" "${xrizer_patches[@]}"
-git -C "$root/xrizer" fetch origin
-git -C "$root/xrizer" checkout --detach 6c3e45f4c18b014a7aba87282ee0677306315052
+# Migrate the exact formerly managed upstream checkout. Its working-tree diff
+# consisted only of this repository's retired xrizer patches; the maintained
+# fork now contains those changes. Never discard changes on any other commit.
+if [[ $(git -C "$root/xrizer" rev-parse HEAD) == 6c3e45f4c18b014a7aba87282ee0677306315052 ]]; then
+  git -C "$root/xrizer" reset --hard
+elif ! git -C "$root/xrizer" diff --quiet || ! git -C "$root/xrizer" diff --cached --quiet; then
+  echo "Refusing to overwrite unmanaged changes in $root/xrizer" >&2
+  exit 1
+fi
+git -C "$root/xrizer" remote set-url origin https://github.com/Villagers654/xrizer
+git -C "$root/xrizer" fetch origin main
+git -C "$root/xrizer" checkout --detach bff90cefa5c63da35389aecbcb3bf1a3872d9622
 git -C "$root/xrizer" submodule update --init --recursive
-for patch in "${xrizer_patches[@]}"; do
-  apply_patch_once "$root/xrizer" "$patch"
-done
 git -C "$root/xrizer" diff --check
 
 dri_prime=""
@@ -98,4 +97,4 @@ mv "$tmp" "$config"
 rm -f "$profile"
 
 echo "Envision profile installed. Run ./scripts/build-envision-runtime.sh to build it."
-echo "The profile is pinned and pull-on-build is disabled so these patches persist."
+echo "The profile is pinned and pull-on-build is disabled so the tested sources persist."

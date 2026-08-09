@@ -58,13 +58,13 @@ repairing BlueZ's rare connected-without-HID state. Do not publish those values.
 ## 4. Room-scale setup
 
 Choose **PSVR2 Room Setup** in WayVR's Games grid or launch
-`psvr2-room-setup`. The compatibility layer supplies the HMD proximity signal
-that xrizer cannot currently express, so a centered 2×2 m default polygon is
+`psvr2-room-setup`. The RiftLift xrizer fork supplies the HMD proximity signal
+that standard OpenXR controller bindings cannot express, so a centered 2×2 m default polygon is
 created automatically. The setup app writes the active `chaperone_info.vrchap`
 play area file that Monado reads at startup; this is the source of the in-headset
 play boundaries (not another runtime UI).
 
-Room Setup alone uses xrizer's patched
+Room Setup alone uses RiftLift xrizer's opt-in
 `RawAndUncalibrated` space, which removes the saved chaperone transform from
 the HMD pose so the Toolkit's raw passthrough-camera pose stays aligned. Games
 and WayVR continue to use the calibrated STAGE space.
@@ -105,7 +105,25 @@ unrestricted space:
 perl -i -pe 's/^PSVR2_CHAPERONE_ENABLE=.*/PSVR2_CHAPERONE_ENABLE=0/' ~/.config/psvr2-linux/settings.env
 ```
 
-## 6. Everyday use
+## 6. Optional Meta Rift games
+
+Meta/Revive compatibility is maintained independently by RiftLift. Install its
+pinned release through this repository's third-party helper, sign in once, then
+add any owned Rift store URL:
+
+```bash
+./scripts/install-riftlift.sh
+riftlift login
+riftlift add 'https://www.meta.com/experiences/APP_ID/'
+```
+
+RiftLift persists the Horizon Link login, verifies entitlement, downloads the
+current PC build, and registers a generic Steam VR shortcut. The startup library
+scan imports that shortcut into WayVR; no title-specific Framework patch is
+required. RiftLift's own README and `riftlift doctor` are authoritative for the
+Meta compatibility stack.
+
+## 7. Everyday use
 
 Power on the headset and controllers. The USB monitor starts Monado and WayVR,
 which opens directly to installed Steam VR games. Select a cover and Play.

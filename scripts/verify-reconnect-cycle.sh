@@ -29,10 +29,10 @@ disconnected
 EOF2
 
 printf 'connected' > "$runtime_state"
-cat > "$start_log"
-cat > "$stop_log"
-cat > "$wayvr_log"
-cat > "$start_invocation_log"
+: > "$start_log"
+: > "$stop_log"
+: > "$wayvr_log"
+: > "$start_invocation_log"
 
 # Minimal fake PSVR2 USB function + DP sink for headset_connected checks.
 mkdir -p "$usb_root/1-1"

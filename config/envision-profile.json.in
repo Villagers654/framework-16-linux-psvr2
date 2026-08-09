@@ -15,7 +15,7 @@
   "opencomposite_branch": null,
   "ovr_comp": {
     "mod_type": "Xrizer",
-    "repo": "https://github.com/Supreeeme/xrizer",
+    "repo": "https://github.com/Villagers654/xrizer",
     "branch": "main",
     "path": "@HOME@/.local/share/envision/psvr2-toolkit-monado/xrizer"
   },

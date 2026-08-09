@@ -150,7 +150,7 @@ This is not a standing-only calibration problem. It means the app's optional
 ./scripts/prepare-envision-runtime.sh
 ```
 
-The binding supplies Sense actions; the scoped xrizer patch supplies proximity
+The binding supplies Sense actions; the maintained RiftLift xrizer fork supplies proximity
 only when `psvr2-room-setup` sets `XRIZER_FORCE_HEADSET_ON_HEAD=1`.
 
 ## Boundary warning overlay is missing or not showing in games
@@ -173,11 +173,11 @@ tracking, a damaged play area, or a frozen camera. The PSVR2 Room Setup app
 writes `chaperone_info.vrchap` for each saved play area. Monado's SteamVR-driver
 loads that file at service startup and applies its saved standing yaw/
 translation to HMD and controller poses. The camera feed is published in the
-driver's raw tracking universe. Upstream xrizer currently maps OpenVR
-`RawAndUncalibrated` to STAGE, so the problem appears only after a room
+driver's raw tracking universe. Unmodified upstream xrizer maps OpenVR
+`RawAndUncalibrated` to STAGE, so the mismatch appears only after a room
 calibration has been saved and the runtime restarted.
 
-This repository's xrizer patch implements a dedicated raw space by removing
+The maintained RiftLift xrizer fork implements a dedicated raw space by removing
 that exact saved chaperone transform. `psvr2-room-setup` enables it only for
 Room Setup; normal applications keep calibrated STAGE coordinates. Re-run
 `./scripts/prepare-envision-runtime.sh`, rebuild the Envision profile, and then
