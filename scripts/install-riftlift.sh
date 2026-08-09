@@ -4,6 +4,7 @@ set -euo pipefail
 # RiftLift owns the Meta/Revive compatibility stack. This PSVR2 integration
 # consumes its tagged installer exactly like any other third-party application.
 tag=v0.1.0
+commit=fdeb9ef3933c998281ed198833dc63269a813af3
 source_dir=${RIFTLIFT_SOURCE_DIR:-"${XDG_DATA_HOME:-$HOME/.local/share}/psvr2-setup/src/riftlift"}
 
 command -v git >/dev/null 2>&1 || { echo "Missing required command: git" >&2; exit 1; }
@@ -18,6 +19,12 @@ else
     fi
     git -C "$source_dir" fetch --depth 1 origin "refs/tags/$tag:refs/tags/$tag"
     git -C "$source_dir" checkout --detach "$tag"
+fi
+
+actual_commit=$(git -C "$source_dir" rev-parse HEAD)
+if [[ "$actual_commit" != "$commit" ]]; then
+    echo "RiftLift $tag resolved to unexpected commit $actual_commit" >&2
+    exit 1
 fi
 
 "$source_dir/install.sh"
