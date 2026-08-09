@@ -122,7 +122,9 @@ edge. It is fully local and does not require the headset to be attached.
 
 The lifecycle monitor requires both the Sony USB device and a connected DRM
 output whose EDID identifies `PS VR2`. Losing either link stops the wrapped VR
-title, WayVR, Monado/Ignition, and the VR audio override. Check the live probe:
+title's complete systemd scope, WayVR, Monado/Ignition, and the VR audio
+override. This includes Proton/Revive children such as Vader Immortal that
+detach from their original launcher. Check the live probe:
 
 ```bash
 psvr2-autostart-monitor --probe

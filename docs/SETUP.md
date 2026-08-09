@@ -156,9 +156,10 @@ headset. A normal desktop launch remains in its normal non-VR mode; the WayVR
 Games launch uses Steam's VR action automatically.
 
 The common game wrapper disables desktop-vblank pacing for every VR title and
-runs each launch in an isolated process group. OpenXR remains the only frame
-clock, and all of a game's Proton/Wine children are terminated if the headset
-disconnects rather than lingering under the WayVR dashboard.
+runs each launch in an isolated process group plus a transient systemd scope.
+OpenXR remains the only frame clock, and the scope terminates all of a game's
+Proton/Wine children if the headset disconnects—even when Revive reparents an
+injected process outside the launcher's process group.
 
 - PS button: toggle the WayVR dashboard.
 - Press either PS button, then pull either trigger within half a second: save the current XWayland VR mirror to

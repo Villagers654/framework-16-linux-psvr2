@@ -22,6 +22,7 @@ socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc"
 game_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-game-active"
 game_registry_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-games"
 game_registration=""
+game_scope="psvr2-game-$BASHPID.scope"
 if [[ ! -S "$socket" ]] || ! ss -H -xl | grep -Fq "$socket"; then
     echo "Monado is active but its IPC socket is unavailable; repairing the runtime" >&2
     "$start_helper"
@@ -64,6 +65,7 @@ game_pid=""
 runtime_watcher=""
 forward_signal() {
     [[ -n "$game_pid" ]] && kill -TERM -- "-$game_pid" 2>/dev/null || true
+    systemctl --user stop --no-block "$game_scope" 2>/dev/null || true
 }
 cleanup() {
     if [[ -n "$runtime_watcher" ]]; then
@@ -82,12 +84,16 @@ trap cleanup EXIT
 # Put each Steam launch in its own process group. If a Proton/Wine child
 # outlives the launcher or the headset disappears, the whole title exits and
 # cannot keep consuming the GPU underneath the restored WayVR dashboard.
-setsid "$@" &
+# A process group handles ordinary native games. The transient systemd scope is
+# the stronger ownership boundary for Proton/Revive: Wine may reparent or move
+# an injected game to another process group, but every descendant remains in
+# this cgroup until the title exits.
+setsid systemd-run --user --scope --unit="${game_scope%.scope}" --collect --quiet -- "$@" &
 game_pid=$!
 install -d -m 0700 "$game_registry_dir"
 game_registration="$game_registry_dir/$BASHPID"
 registration_tmp="$game_registration.tmp"
-printf '%s %s\n' "$game_pid" "$(< /proc/sys/kernel/random/boot_id)" > "$registration_tmp"
+printf '%s %s %s\n' "$game_pid" "$(< /proc/sys/kernel/random/boot_id)" "$game_scope" > "$registration_tmp"
 chmod 0600 "$registration_tmp"
 mv -f -- "$registration_tmp" "$game_registration"
 
@@ -101,6 +107,7 @@ mv -f -- "$registration_tmp" "$game_registration"
     while kill -0 -- "-$game_pid" 2>/dev/null; do
         if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
             kill -TERM -- "-$game_pid" 2>/dev/null || true
+            systemctl --user stop --no-block "$game_scope" 2>/dev/null || true
             exit 0
         fi
         sleep 1
@@ -116,7 +123,8 @@ set -e
 # Do not restore WayVR while a detached/injected game is still alive. Wine
 # reparents those processes to the user manager, but it preserves the launch
 # session's process group, which gives us a runtime-agnostic ownership handle.
-while kill -0 -- "-$game_pid" 2>/dev/null; do
+while kill -0 -- "-$game_pid" 2>/dev/null || \
+    systemctl --user is-active --quiet "$game_scope"; do
     sleep 0.25
 done
 exit "$game_status"

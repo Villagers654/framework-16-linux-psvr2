@@ -8,6 +8,7 @@ term_wait_interval="${PSVR2_GAME_STOP_WAIT_INTERVAL:-0.1}"
 
 declare -A groups=()
 declare -A wrappers=()
+declare -A scopes=()
 
 is_vr_wrapper() {
     local pid=${1:-} token
@@ -35,11 +36,14 @@ if [[ -d "$registry_dir" ]]; then
     shopt -s nullglob
     for registration in "$registry_dir"/*; do
         wrapper=${registration##*/}
-        read -r pgid registered_boot < "$registration" || true
+        read -r pgid registered_boot scope < "$registration" || true
         if [[ "$registered_boot" == "$boot_id" ]] && is_vr_wrapper "$wrapper" && \
             [[ "$pgid" =~ ^[0-9]+$ && "$pgid" -gt 1 ]]; then
             wrappers["$wrapper"]=1
             groups["$pgid"]=1
+            if [[ "${scope:-}" =~ ^psvr2-game-[0-9]+[.]scope$ ]]; then
+                scopes["$scope"]=1
+            fi
         else
             rm -f -- "$registration"
         fi
@@ -49,7 +53,9 @@ fi
 # Pick up games launched by an older installed wrapper, before registration
 # existed. Matching an exact argv token avoids killing unrelated Wine, Proton,
 # Steam, or shell processes whose command merely mentions PSVR2.
-if [[ -n "${PSVR2_LEGACY_WRAPPER_PIDS:-}" ]]; then
+if (( ${#wrappers[@]} > 0 )); then
+    :
+elif [[ -n "${PSVR2_LEGACY_WRAPPER_PIDS:-}" ]]; then
     for wrapper in $PSVR2_LEGACY_WRAPPER_PIDS; do
         remember_wrapper "$wrapper"
     done
@@ -59,7 +65,7 @@ else
     done
 fi
 
-if (( ${#groups[@]} == 0 )); then
+if (( ${#groups[@]} == 0 && ${#scopes[@]} == 0 )); then
     exit 0
 fi
 
@@ -69,6 +75,9 @@ for wrapper in "${!wrappers[@]}"; do
 done
 for pgid in "${!groups[@]}"; do
     kill -TERM -- "-$pgid" 2>/dev/null || true
+done
+for scope in "${!scopes[@]}"; do
+    systemctl --user stop --no-block "$scope" 2>/dev/null || true
 done
 
 for _ in $(seq 1 "$term_wait_steps"); do
@@ -87,6 +96,14 @@ for pgid in "${!groups[@]}"; do
     if kill -0 -- "-$pgid" 2>/dev/null; then
         echo "PSVR2 game process group $pgid did not exit; forcing it to stop." >&2
         kill -KILL -- "-$pgid" 2>/dev/null || true
+    fi
+done
+for scope in "${!scopes[@]}"; do
+    state=$(systemctl --user show "$scope" -p ActiveState --value 2>/dev/null || true)
+    if [[ "$state" != inactive && -n "$state" ]]; then
+        echo "PSVR2 game scope $scope did not exit; forcing it to stop." >&2
+        systemctl --user kill --kill-whom=all --signal=SIGKILL "$scope" 2>/dev/null || true
+        systemctl --user stop --no-block "$scope" 2>/dev/null || true
     fi
 done
 
