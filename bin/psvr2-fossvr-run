@@ -26,10 +26,10 @@ if [[ ! -S "$socket" ]] || ! ss -H -xl | grep -Fq "$socket"; then
     echo "Monado is active but its IPC socket is unavailable; repairing the runtime" >&2
     "$start_helper"
 fi
-[[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket" || {
+if [[ ! -S "$socket" ]] || ! ss -H -xl | grep -Fq "$socket"; then
     echo "Monado IPC socket is unavailable: $socket" >&2
     exit 1
-}
+fi
 
 export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
 export VR_OVERRIDE="$ENVISION_PROFILE_ROOT/xrizer/target/release"

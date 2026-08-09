@@ -27,7 +27,7 @@ PSVR2. Per-game Steam resolution overrides remain available.
 | Component | Scope | Why |
 |---|---|---|
 | PSVR2 Toolkit + Ignition | **Linux PSVR2** | Runs Sony's SteamVR driver through Proton and exposes it to Linux VR runtimes. |
-| Supremium Monado + RiftLift xrizer | **Linux PSVR2** | Supplies OpenXR and translates OpenVR games without relying on SteamVR's compositor. |
+| Supremium Monado + xrizer | **Linux PSVR2** | Supplies OpenXR and translates OpenVR games without relying on SteamVR's compositor. |
 | WayVR launcher patches | **Linux PSVR2** | Opens a VR-only game grid, launches explicit VR modes, and binds native Sense controls. |
 | xr-chaperone | **Linux OpenXR** | Provides Oculus-style visual boundary warnings from your PSVR2 play area in a separate overlay process. |
 | [RiftLift](https://github.com/Villagers654/RiftLift) | **Optional Meta Rift games** | Installs and launches owned Rift titles through maintained ReviveXR and Monado integration. |
@@ -158,13 +158,6 @@ required.
 ## Everyday use
 
 - Power on/connect PSVR2: the runtime and game launcher start automatically.
-- The laptop shows a borderless fullscreen, GPU-native left-eye spectator view
-  while the headset continues rendering at 120 Hz. Set
-  `PSVR2_SPECTATOR_ENABLE=0` to disable it in `settings.env`.
-- Run `psvr2-spectator on`, `psvr2-spectator off`, or
-  `psvr2-spectator toggle` to change that choice persistently. The command
-  cleanly restarts an active VR session; add `--no-restart` to defer it. GNOME's
-  app grid also contains **Toggle PSVR2 Spectator View**.
 - Turn controllers on before or after headset launch: WayVR starts without
   blocking. Controllers can appear live over Bluetooth + HID; no Monado restart
   is required just to expose roles.

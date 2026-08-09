@@ -4,9 +4,8 @@ source "$HOME/.local/lib/psvr2-linux/common.sh"
 
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 runtime_preflight="$helper_dir/psvr2-runtime-preflight"
-chaperone_sanity="$helper_dir/psvr2-chaperone-sanity"
 audio_helper="$helper_dir/psvr2-audio"
-for helper in "$runtime_preflight" "$chaperone_sanity" "$audio_helper"; do
+for helper in "$runtime_preflight" "$audio_helper"; do
     if [[ ! -x "$helper" ]]; then
         echo "Required PSVR2 helper is missing or not executable: $helper" >&2
         exit 1
@@ -67,7 +66,7 @@ if systemctl --user is-active --quiet psvr2-fossvr.service \
     && [[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket"; then
     start_optional_services
     "$audio_helper" vr || true
-    echo "PSVR2 already ready: ${PSVR2_REFRESH_RATE} Hz / ${PSVR2_RENDER_SCALE}% + WayVR."
+    echo "PSVR2 already ready: ${PSVR2_RENDER_SCALE}% render scale + WayVR."
     exit 0
 fi
 
@@ -80,8 +79,6 @@ assert_monado_profile_supports_psvr2
 assert_monado_binary_has_psvr2_builder
 
 rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
-
-"$chaperone_sanity" || true
 
 systemctl --user stop monado.socket monado.service 2>/dev/null || true
 "$runtime_preflight"
@@ -103,7 +100,10 @@ for _ in $(seq 1 100); do
     fi
     sleep 0.1
 done
-[[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket" || { echo "Monado IPC socket was not created" >&2; exit 1; }
+if [[ ! -S "$socket" ]] || ! ss -H -xl | grep -Fq "$socket"; then
+    echo "Monado IPC socket was not created" >&2
+    exit 1
+fi
 
 is_monado_hmd_ready() {
     local pid=$1
@@ -134,11 +134,6 @@ is_monado_failed() {
         return 0
     fi
 
-    # "No builder selected in config" is normal while probing until a backend wins.
-    # Only treat it as failure when a final selected backend is missing.
-    if grep -Fq "No builder selected in config" <<<"$logs" && ! grep -Fq "Selected psvr2 because" <<<"$logs"; then
-        return 0
-    fi
     return 1
 }
 
@@ -177,4 +172,4 @@ systemctl --user is-active --quiet psvr2-fossvr-wayvr.service || {
     journalctl --user -u psvr2-fossvr-wayvr.service -n 60 --no-pager >&2; exit 1;
 }
 "$audio_helper" vr || true
-echo "PSVR2 ready: ${PSVR2_REFRESH_RATE} Hz / ${PSVR2_RENDER_SCALE}% + WayVR."
+echo "PSVR2 ready: ${PSVR2_RENDER_SCALE}% render scale + WayVR."

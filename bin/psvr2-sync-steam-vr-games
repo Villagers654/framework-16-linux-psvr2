@@ -36,35 +36,39 @@ if CONFIG.exists():
 
 # Hybrid games known to require an explicit VR mode. Add new entries here.
 VR_FLAGS = {
-    "1222730": "-vr",                       # STAR WARS: Squadrons
-    "732690": "-vr",                       # Five Nights at Freddy's: Help Wanted
+    "1222730": "-vr",  # STAR WARS: Squadrons
+    "732690": "-vr",  # Five Nights at Freddy's: Help Wanted
 }
 
 # Some games advertise Linux support but omit VR from their native Linux depot.
 # Force their Windows build so Steam's /vr launch action reaches xrizer.
 FORCE_PROTON = {
-    "341800": "proton_experimental",       # Keep Talking and Nobody Explodes
+    "341800": "proton_experimental",  # Keep Talking and Nobody Explodes
 }
 KNOWN = {appid: True for appid in set(VR_FLAGS) | set(FORCE_PROTON)}
 NON_GAME_IDS = {
-    "250820",   # SteamVR
+    "250820",  # SteamVR
     "2580190",  # PlayStation VR2 App
     "1493710",  # Proton Experimental
-    "1070560", "1391110", "1628350", "4183110",  # Steam Linux runtimes
-    "228980", "1826330", "2805730",  # redistributables and compatibility tools
+    "1070560",
+    "1391110",
+    "1628350",
+    "4183110",  # Steam Linux runtimes
+    "228980",
+    "1826330",
+    "2805730",  # redistributables and compatibility tools
 }
 
-KTANE_SETTINGS = (
-    STEAM / "steamapps/compatdata/341800/pfx/drive_c/users/steamuser/AppData/LocalLow"
-    / "Steel Crate Games/Keep Talking and Nobody Explodes/playerSettings.xml"
-)
 
 def steam_running() -> bool:
     for comm in Path("/proc").glob("[0-9]*/comm"):
         try:
-            if comm.read_text().strip() == "steam": return True
-        except (OSError, PermissionError): pass
+            if comm.read_text().strip() == "steam":
+                return True
+        except (OSError, PermissionError):
+            pass
     return False
+
 
 def installed_apps() -> dict[str, str]:
     def parse_root(root: Path) -> dict[str, str]:
@@ -73,14 +77,17 @@ def installed_apps() -> dict[str, str]:
             text = manifest.read_text(errors="replace")
             appid = re.search(r'^\s*"appid"\s+"(\d+)"', text, re.M)
             name = re.search(r'^\s*"name"\s+"([^"]+)"', text, re.M)
-            if appid: apps[appid.group(1)] = name.group(1) if name else appid.group(1)
+            if appid:
+                apps[appid.group(1)] = name.group(1) if name else appid.group(1)
         return apps
 
     apps: dict[str, str] = {}
     roots = {STEAM / "steamapps"}
     library_file = STEAM / "config/libraryfolders.vdf"
     if library_file.exists():
-        for match in re.finditer(r'"path"\s+"([^"]+)"', library_file.read_text(errors="replace")):
+        for match in re.finditer(
+            r'"path"\s+"([^"]+)"', library_file.read_text(errors="replace")
+        ):
             raw_path = os.path.expandvars(match.group(1))
             normalized = raw_path.replace("\\\\", "/").replace("\\", "/")
             root = Path(os.path.expanduser(normalized))
@@ -89,6 +96,7 @@ def installed_apps() -> dict[str, str]:
     for root in sorted(roots):
         apps.update(parse_root(root))
     return apps
+
 
 def registered_vr_apps(installed: dict[str, str]) -> dict[str, str]:
     """Return Steam and non-Steam VR entries that are currently launchable."""
@@ -107,7 +115,11 @@ def registered_vr_apps(installed: dict[str, str]) -> dict[str, str]:
         appid = match.group(1)
         strings = entry.get("strings", {})
         localized = strings.get("en_us", {}) if isinstance(strings, dict) else {}
-        name = localized.get("name", installed.get(appid, appid)) if isinstance(localized, dict) else installed.get(appid, appid)
+        name = (
+            localized.get("name", installed.get(appid, appid))
+            if isinstance(localized, dict)
+            else installed.get(appid, appid)
+        )
 
         # Normal Steam games remain authoritative through their appmanifest.
         # For non-Steam entries, require Steam's generated Linux launcher to
@@ -115,62 +127,92 @@ def registered_vr_apps(installed: dict[str, str]) -> dict[str, str]:
         if appid not in installed:
             if entry.get("launch_type") != "binary":
                 continue
-            binary = Path(os.path.expandvars(str(entry.get("binary_path_linux", "")))).expanduser()
+            binary = Path(
+                os.path.expandvars(str(entry.get("binary_path_linux", "")))
+            ).expanduser()
             if not binary.is_file():
                 continue
         result[appid] = str(name)
     return result
 
+
 def store_says_vr(appid: str) -> bool:
-    url = f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=us&l=english"
+    url = (
+        f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=us&l=english"
+    )
     request = urllib.request.Request(url, headers={"User-Agent": "PSVR2-Steam-sync/1"})
     with urllib.request.urlopen(request, timeout=4) as response:
         record = json.load(response).get(appid, {})
     data = record.get("data", {}) if record.get("success") else {}
-    descriptions = [str(x.get("description", "")).lower() for x in data.get("categories", [])]
-    return any("vr only" in x or "vr supported" in x or "vr support" in x for x in descriptions)
+    descriptions = [
+        str(x.get("description", "")).lower() for x in data.get("categories", [])
+    ]
+    return any(
+        "vr only" in x or "vr supported" in x or "vr support" in x for x in descriptions
+    )
+
 
 def desired_launch(appid: str) -> str:
     suffix = VR_FLAGS.get(appid, "")
     return f"{WRAPPER} %command%" + (f" {suffix}" if suffix else "")
 
+
 def block_bounds(text: str, header: re.Match[str]) -> tuple[int, int]:
-    start = header.end(); depth = 1; length = 0
+    start = header.end()
+    depth = 1
+    length = 0
     for line in text[start:].splitlines(keepends=True):
-        depth += line.count("{") - line.count("}"); length += len(line)
-        if depth == 0: break
+        depth += line.count("{") - line.count("}")
+        length += len(line)
+        if depth == 0:
+            break
     return start, start + length
 
+
 def patch_localconfig(path: Path, vr_appids: set[str]) -> bool:
-    original = path.read_text(errors="strict"); text = original
+    original = path.read_text(errors="strict")
+    text = original
     for appid in sorted(vr_appids, key=int):
-        header = re.search(rf'(?m)^\t{{5}}"{re.escape(appid)}"[ \t]*\n\t{{5}}\{{[ \t]*$', text)
-        if not header: continue
+        header = re.search(
+            rf'(?m)^\t{{5}}"{re.escape(appid)}"[ \t]*\n\t{{5}}\{{[ \t]*$', text
+        )
+        if not header:
+            continue
         block_start, block_end = block_bounds(text, header)
         block = text[block_start:block_end]
         wanted = desired_launch(appid)
         option = re.search(r'(?m)^\t{6}"LaunchOptions"\s+"([^"]*)"\s*$', block)
         if option:
             current = option.group(1)
-            if WRAPPER in current: replacement = wanted
+            if WRAPPER in current:
+                replacement = wanted
             elif "%command%" in current:
                 replacement = current.replace("%command%", f"{WRAPPER} %command%", 1)
-                if VR_FLAGS.get(appid) and VR_FLAGS[appid] not in replacement: replacement += " " + VR_FLAGS[appid]
-            else: replacement = wanted + (" " + current if current else "")
-            block = block[:option.start(1)] + replacement + block[option.end(1):]
+                if VR_FLAGS.get(appid) and VR_FLAGS[appid] not in replacement:
+                    replacement += " " + VR_FLAGS[appid]
+            else:
+                replacement = wanted + (" " + current if current else "")
+            block = block[: option.start(1)] + replacement + block[option.end(1) :]
         else:
             block = f'\n\t\t\t\t\t\t"LaunchOptions"\t\t"{wanted}"' + block
         text = text[:block_start] + block + text[block_end:]
-    if text == original: return False
+    if text == original:
+        return False
     backup = path.with_name(path.name + ".psvr2-auto-backup")
-    if not backup.exists(): backup.write_text(original)
+    if not backup.exists():
+        backup.write_text(original)
     mode = stat.S_IMODE(path.stat().st_mode)
     with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False) as output:
-        output.write(text); temporary = Path(output.name)
-    temporary.chmod(mode); os.replace(temporary, path); return True
+        output.write(text)
+        temporary = Path(output.name)
+    temporary.chmod(mode)
+    os.replace(temporary, path)
+    return True
+
 
 def patch_compat_tools(path: Path) -> bool:
-    original = path.read_text(errors="strict"); text = original
+    original = path.read_text(errors="strict")
+    text = original
     section = re.search(r'(?m)^\t{4}"CompatToolMapping"[ \t]*\n\t{4}\{[ \t]*$', text)
     if not section:
         print(f"PSVR2: CompatToolMapping section not found in {path}", file=sys.stderr)
@@ -180,49 +222,44 @@ def patch_compat_tools(path: Path) -> bool:
     for appid, tool in FORCE_PROTON.items():
         wanted = (
             f'\t\t\t\t\t"{appid}"\n'
-            '\t\t\t\t\t{\n'
+            "\t\t\t\t\t{\n"
             f'\t\t\t\t\t\t"name"\t\t"{tool}"\n'
             '\t\t\t\t\t\t"config"\t\t""\n'
             '\t\t\t\t\t\t"priority"\t\t"250"\n'
-            '\t\t\t\t\t}\n'
+            "\t\t\t\t\t}\n"
         )
-        entry = re.search(rf'(?m)^\t{{5}}"{re.escape(appid)}"[ \t]*\n\t{{5}}\{{[ \t]*$', block)
+        entry = re.search(
+            rf'(?m)^\t{{5}}"{re.escape(appid)}"[ \t]*\n\t{{5}}\{{[ \t]*$', block
+        )
         if entry:
             entry_start = entry.start()
             _, entry_end = block_bounds(block, entry)
             block = block[:entry_start] + wanted + block[entry_end:]
         else:
             closing = block.rfind("\t\t\t\t}")
-            if closing < 0: continue
+            if closing < 0:
+                continue
             block = block[:closing] + wanted + block[closing:]
     text = text[:section_start] + block + text[section_end:]
-    if text == original: return False
+    if text == original:
+        return False
     backup = path.with_name(path.name + ".psvr2-auto-backup")
-    if not backup.exists(): backup.write_text(original)
+    if not backup.exists():
+        backup.write_text(original)
     mode = stat.S_IMODE(path.stat().st_mode)
     with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False) as output:
-        output.write(text); temporary = Path(output.name)
-    temporary.chmod(mode); os.replace(temporary, path); return True
-
-def patch_ktane_settings(path: Path) -> bool:
-    """Avoid pacing KTaNE's 120 Hz VR output against its desktop mirror."""
-    if not path.exists(): return False
-    original = path.read_text(errors="strict")
-    text = original.replace("<VSync>1</VSync>", "<VSync>0</VSync>")
-    # Full 170% PSVR2 resolution plus legacy Unity MSAA saturates the RX 7600
-    # path. The 1.7x eye target already supersamples edges, so disable the
-    # redundant pass without changing the 3400x3468 render target.
-    text = re.sub(r"<AntiAliasing>[24]</AntiAliasing>", "<AntiAliasing>0</AntiAliasing>", text)
-    if text == original: return False
-    mode = stat.S_IMODE(path.stat().st_mode)
-    with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False) as output:
-        output.write(text); temporary = Path(output.name)
-    temporary.chmod(mode); os.replace(temporary, path); return True
+        output.write(text)
+        temporary = Path(output.name)
+    temporary.chmod(mode)
+    os.replace(temporary, path)
+    return True
 
 
 def restart_wayvr_dashboard() -> None:
     if os.environ.get("PSVR2_SYNC_RESTART_DASHBOARD", "1") == "0":
-        print("PSVR2: PSVR2_SYNC_RESTART_DASHBOARD is disabled; skipping WayVR restart.")
+        print(
+            "PSVR2: PSVR2_SYNC_RESTART_DASHBOARD is disabled; skipping WayVR restart."
+        )
         return
 
     cmd = ["systemctl", "--user", "is-active", "--quiet", "psvr2-fossvr-wayvr.service"]
@@ -237,10 +274,19 @@ def restart_wayvr_dashboard() -> None:
             f" {proc.stderr.strip() or proc.stdout.strip()}"
         )
 
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Sync Steam VR launch metadata for WayVR.")
-    parser.add_argument("--discovery-only", action="store_true", help="Only refresh the WayVR cache.")
-    parser.add_argument("--force", action="store_true", help="Allow launch-option patching while Steam is running.")
+    parser = argparse.ArgumentParser(
+        description="Sync Steam VR launch metadata for WayVR."
+    )
+    parser.add_argument(
+        "--discovery-only", action="store_true", help="Only refresh the WayVR cache."
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow launch-option patching while Steam is running.",
+    )
     parser.add_argument(
         "--refresh-metadata",
         action="store_true",
@@ -255,12 +301,20 @@ def main() -> int:
 
     apps = installed_apps()
     registered_vr = registered_vr_apps(apps)
-    apps.update({appid: name for appid, name in registered_vr.items() if appid not in apps})
+    apps.update(
+        {appid: name for appid, name in registered_vr.items() if appid not in apps}
+    )
     cache = dict(KNOWN)
     try:
         saved = json.loads(STATE.read_text())
         if isinstance(saved, dict):
-            cache.update({str(key): value for key, value in saved.items() if isinstance(value, bool)})
+            cache.update(
+                {
+                    str(key): value
+                    for key, value in saved.items()
+                    if isinstance(value, bool)
+                }
+            )
     except (FileNotFoundError, json.JSONDecodeError):
         pass
 
@@ -303,7 +357,10 @@ def main() -> int:
         if appid.isdecimal():
             cache[appid] = True
         else:
-            print(f"PSVR2: ignoring invalid forced Steam app ID: {appid!r}", file=sys.stderr)
+            print(
+                f"PSVR2: ignoring invalid forced Steam app ID: {appid!r}",
+                file=sys.stderr,
+            )
 
     # Persist a deterministic cache for WayVR so startup behavior does not depend
     # on how long Steam has had to settle after installation or launch.
@@ -318,7 +375,9 @@ def main() -> int:
         temporary.chmod(0o644)
         os.replace(temporary, STATE)
 
-    print(f"PSVR2: synced {len(cache)} steam ids, {sum(1 for v in cache.values() if v)} vr-enabled")
+    print(
+        f"PSVR2: synced {len(cache)} steam ids, {sum(1 for v in cache.values() if v)} vr-enabled"
+    )
 
     patch_launch_options = (
         MANAGE_LAUNCH_OPTIONS
@@ -330,17 +389,21 @@ def main() -> int:
         for config in (STEAM / "userdata").glob("[0-9]*/config/localconfig.vdf"):
             patch_localconfig(config, vr)
         steam_config = STEAM / "config/config.vdf"
-        if steam_config.exists(): patch_compat_tools(steam_config)
+        if steam_config.exists():
+            patch_compat_tools(steam_config)
     elif args.discovery_only:
         print("PSVR2: discovery-only mode; launch options were not changed.")
     elif not MANAGE_LAUNCH_OPTIONS:
         print("PSVR2: launch-option management is disabled in settings.env.")
     else:
-        print("PSVR2: Steam is running; launch options were not changed (use --force to override).")
+        print(
+            "PSVR2: Steam is running; launch options were not changed (use --force to override)."
+        )
 
     if state_changed and not args.no_restart_dashboard:
         restart_wayvr_dashboard()
-    patch_ktane_settings(KTANE_SETTINGS)
     return 0
 
-if __name__ == "__main__": sys.exit(main())
+
+if __name__ == "__main__":
+    sys.exit(main())

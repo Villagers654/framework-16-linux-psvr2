@@ -228,11 +228,6 @@ runtime_failure_log_contains_critical_failure() {
     grep -Fq "XRT_ERROR_DEVICE_CREATION_FAILED" <<<"$result" && return 0
     grep -Fq "Unable to create devices" <<<"$result" && return 0
     grep -Fq "Monado failed to start" <<<"$result" && return 0
-    grep -Fq "Selected lighthouse because it was certain it could create a head" <<<"$result" && return 0
-    if grep -Fq "No builder selected in config (or wasn't compiled in)" <<<"$result" && \
-        grep -Fq "Selected lighthouse because it was certain it could create a head" <<<"$result"; then
-        return 0
-    fi
     grep -Fq "Unable to find HMD" <<<"$result" && return 0
     return 1
 }

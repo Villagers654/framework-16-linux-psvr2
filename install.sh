@@ -58,12 +58,15 @@ legacy_helpers=(
     psvr2-register-steam-library
     psvr2-steamvr-bridge
     steamvr-room-setup-on-fedora
+    psvr2-spectator
+    psvr2-chaperone-sanity
 )
 legacy_desktops=(
     SteamVR.desktop
     psvr2-fossvr.desktop
     psvr2-fossvr-stop.desktop
     valve-steamvr.desktop
+    psvr2-spectator-toggle.desktop
 )
 
 uninstall_user() {
@@ -93,6 +96,7 @@ uninstall_user() {
     rm -f -- "$HOME/.local/lib/psvr2-linux/common.sh" \
         "$HOME/.config/environment.d/60-psvr2-openxr.conf" \
         "$HOME/.config/wireplumber/wireplumber.conf.d/51-psvr2-displayport-audio.conf"
+    rm -f -- "$HOME/.config/systemd/user/psvr2-fossvr.service.d/50-spectator.conf"
 
     if $purge_data; then
         rm -rf -- "$HOME/.config/psvr2-linux" "$HOME/.config/monado/psvr2" \
@@ -153,6 +157,7 @@ if [[ "$mode" == user ]]; then
     rm -f -- "${legacy_units[@]/#/$HOME/.config/systemd/user/}"
     rm -f -- "${legacy_helpers[@]/#/$HOME/.local/bin/}"
     rm -f -- "${legacy_desktops[@]/#/$HOME/.local/share/applications/}"
+    rm -f -- "$HOME/.config/systemd/user/psvr2-fossvr.service.d/50-spectator.conf"
     install -m 0644 "$repo_dir"/systemd/user/* "$HOME/.config/systemd/user/"
 
     if [[ ! -e "$HOME/.config/psvr2-linux/settings.env" ]]; then
@@ -171,6 +176,10 @@ if [[ "$mode" == user ]]; then
                 "$HOME/.config/psvr2-linux/settings.env"
         fi
     fi
+    sed -i -e '/^PSVR2_SPECTATOR_ENABLE=/d' \
+        -e '/^PSVR2_LOAD_PSVR2_SENSE=/d' \
+        -e '/^PSVR2_REFRESH_RATE=/d' \
+        "$HOME/.config/psvr2-linux/settings.env"
     chmod 0600 "$HOME/.config/psvr2-linux/settings.env"
 
     # Apply LVRA's DisplayPort dropout fix only to the configured HMD sink.

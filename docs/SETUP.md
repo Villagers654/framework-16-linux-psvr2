@@ -155,11 +155,6 @@ Experimental so its Windows-only VR mode is selected when launched from the
 headset. A normal desktop launch remains in its normal non-VR mode; the WayVR
 Games launch uses Steam's VR action automatically.
 
-The sync helper also disables KTaNE's desktop VSync and redundant legacy
-MSAA. This prevents the Unity 2017 renderer from pacing the
-120 Hz headset against the laptop mirror and from saturating the GPU. It does
-not lower the headset render target: the game still receives 3400x3468 per eye.
-
 The common game wrapper disables desktop-vblank pacing for every VR title and
 runs each launch in an isolated process group. OpenXR remains the only frame
 clock, and all of a game's Proton/Wine children are terminated if the headset

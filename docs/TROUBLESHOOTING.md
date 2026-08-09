@@ -28,7 +28,7 @@ Got devices:
 ```
 
 even when both Sense controllers are paired and visible in Bluetooth, set
-`PSVR2_LOAD_PSVR2_SENSE=1` (and restart Monado), then verify that Monado logs
+`LH_LOAD_PSVR2=1` (and restart Monado), then verify that Monado logs
 emit `Init playstation_vr2_sense module...` and `TrackedDeviceAdded` lines.
 
 ## Blue Monado environment after leaving a game or reconnecting
@@ -192,10 +192,8 @@ Room Setup; normal applications keep calibrated STAGE coordinates. Re-run
 `./install.sh --user` if the symptom returns after replacing the runtime.
 Do not delete the calibrated play area or patch Unity's `GameAssembly.so`.
 
-This setup also runs `psvr2-chaperone-sanity` at startup and after a room-setup
-save. If a `standing.translation` entry is clearly invalid (for example a very
-high Y offset), it is clamped back to a safe range with a timestamped backup
-so the next boot does not place the HMD far above or below the floor.
+The Toolkit's saved calibration is authoritative. This integration does not
+clamp or rewrite its standing translation heuristically.
 
 ## Error 102: vrclient shared library not found
 
@@ -206,8 +204,6 @@ contain `~/.local/bin/psvr2-fossvr-run %command%`. Run
 For **Keep Talking and Nobody Explodes**, this also restores the forced Proton
 Experimental mapping. Its native Linux build does not contain VR support; do
 not switch it back to the Linux runtime if you want to launch it in VR.
-The helper additionally restores the known-good KTaNE profile (`VSync=0`, MSAA
-off) while leaving the global 120 Hz / 170% PSVR2 target unchanged.
 
 ## Games do not appear in WayVR's Games tab after installation
 

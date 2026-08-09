@@ -22,7 +22,6 @@ for state_dir in \
 done
 
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
-"$helper_dir/psvr2-chaperone-sanity"
 "$helper_dir/psvr2-fossvr-start"
 
 # The live camera mesh is created from the HMD pose captured when Unity starts.
@@ -166,7 +165,6 @@ fi
 # Room Setup run, not only after a successful save. Otherwise that transient
 # floor pose leaks into xr-chaperone and all subsequent games.
 PSVR2_DISCONNECT_CONTROLLERS=0 "$helper_dir/psvr2-fossvr-stop"
-"$helper_dir/psvr2-chaperone-sanity"
 "$helper_dir/psvr2-import-boundary"
 # The proprietary driver releases several PSVR2 USB interfaces
 # asynchronously. Give them time to settle before reacquiring the HMD.

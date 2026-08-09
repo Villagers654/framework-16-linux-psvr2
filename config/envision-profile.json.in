@@ -26,10 +26,6 @@
     "mercury_enabled": false
   },
   "environment": {
-    "XRT_DEBUG_GUI": "1",
-    "XRT_CURATED_GUI": "1",
-    "XRT_SPECTATOR_MODE": "1",
-    "SDL_VIDEODRIVER": "x11",
     "LH_LOAD_PSVR2": "1",
     "DRI_PRIME": "@DRI_PRIME@",
     "XRT_COMPOSITOR_COMPUTE": "1",

@@ -4,13 +4,9 @@ source "$HOME/.local/lib/psvr2-linux/common.sh"
 
 # Use Monado's Sony-driver bridge for complete HMD and Sense optical tracking.
 # This loads the driver through Ignition; it does not launch Valve's SteamVR runtime.
-psvr2_sense="${PSVR2_LOAD_PSVR2_SENSE:-${LH_LOAD_PSVR2:-1}}"
 export STEAMVR_LH_ENABLE=true
 export LH_LOAD_LIGHTHOUSE=false
-case "$psvr2_sense" in
-    0|false|FALSE|off|OFF|disabled|DISABLED|no|NO) export LH_LOAD_PSVR2=false ;;
-    *) export LH_LOAD_PSVR2=true ;;
-esac
+export LH_LOAD_PSVR2=1
 export LH_DISCOVER_WAIT_MS=5000
 export STEAMVR_PATH="$STEAM_ROOT/steamapps/common/SteamVR"
 export PROTONPREFIX="$PSVR2_SETUP_ROOT/ignition-prefix"
@@ -47,16 +43,10 @@ if [[ -r "$boundary_file" ]]; then
         export XRT_STAGE_BOUNDS_HEIGHT="$stage_depth"
     fi
 fi
-# Never inherit the abandoned experimental window-peek mirror path.
-unset XRT_WINDOW_PEEK
-if [[ "$PSVR2_SPECTATOR_ENABLE" = 1 ]]; then
-    export XRT_DEBUG_GUI=1 XRT_CURATED_GUI=1 XRT_SPECTATOR_MODE=1
-    # XWayland gives the dGPU-backed OpenGL mirror a reliable presentation path
-    # on GNOME Wayland while the headset remains on Monado's direct display.
-    export SDL_VIDEODRIVER=x11
-else
-    export XRT_DEBUG_GUI=0 XRT_CURATED_GUI=0
-fi
+# This service is a production compositor, not Monado's developer UI. Ignore
+# stale session/profile variables left by older revisions of this setup.
+export XRT_DEBUG_GUI=0 XRT_CURATED_GUI=0
+unset XRT_SPECTATOR_MODE XRT_WINDOW_PEEK
 export XRT_COMPOSITOR_FORCE_VK_DISPLAY=0
 export XRT_COMP_FRAME_LAG_LOG_AS_LEVEL=warn
 export U_PACING_APP_USE_MIN_FRAME_PERIOD=1

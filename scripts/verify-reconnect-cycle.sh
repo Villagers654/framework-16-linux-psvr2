@@ -67,11 +67,7 @@ echo "stop" >> "$count_file"
 printf 'inactive\n' > "$runtime_state_file"
 exit 0
 EOF3
-cat > "$helpers/psvr2-chaperone-sanity" <<'EOF3'
-#!/usr/bin/bash
-exit 0
-EOF3
-chmod 0755 "$helpers/psvr2-fossvr-start" "$helpers/psvr2-fossvr-stop" "$helpers/psvr2-chaperone-sanity"
+chmod 0755 "$helpers/psvr2-fossvr-start" "$helpers/psvr2-fossvr-stop"
 
 wait_for() {
     local target_file=$1
