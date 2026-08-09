@@ -1,0 +1,20 @@
+[Unit]
+Description=Recover a wedged PSVR2 USB function
+Documentation=https://wiki.vronlinux.org/docs/hardware/psvr2/
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/psvr2-usb-recover
+TimeoutStartSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectSystem=strict
+ReadWritePaths=/sys/devices
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native

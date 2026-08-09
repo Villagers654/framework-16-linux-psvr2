@@ -29,7 +29,7 @@ python3 -m json.tool config/room-setup-bindings-oculus-touch.json >/dev/null
 python3 -m json.tool config/envision-profile.json.in >/dev/null
 grep -Fq 'PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1' \
   config/environment.d/60-psvr2-openxr.conf.in
-grep -Fq 'psvr2-sync-steam-vr-games --force --no-restart-dashboard' \
+grep -Fq 'psvr2-sync-steam-vr-games --discovery-only --no-restart-dashboard' \
   systemd/user/psvr2-steam-vr-sync.service
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
   "$work_dir/chaperone.toml"
@@ -49,11 +49,15 @@ if command -v systemd-analyze >/dev/null 2>&1; then
     "$verify_root/etc/systemd/system/psvr2-dgpu-power.service"
   sed -i 's/@DGPU_PCI_ADDRESS@/0000:03:00.0/g' \
     "$verify_root/etc/systemd/system/psvr2-dgpu-power.service"
+  install -Dm0755 systemd/system/psvr2-usb-recover \
+    "$verify_root/usr/local/libexec/psvr2-usb-recover"
+  install -Dm0644 systemd/system/psvr2-usb-recover.service \
+    "$verify_root/etc/systemd/system/psvr2-usb-recover.service"
   for unit in sysinit.target basic.target shutdown.target; do
     install -Dm0644 "/usr/lib/systemd/system/$unit" \
       "$verify_root/usr/lib/systemd/system/$unit"
   done
-  systemd-analyze verify --root="$verify_root" psvr2-dgpu-power.service
+  systemd-analyze verify --root="$verify_root" psvr2-dgpu-power.service psvr2-usb-recover.service
 fi
 
 ./scripts/verify-reconnect-cycle.sh

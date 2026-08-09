@@ -52,9 +52,20 @@ flock 8
 systemctl --user start psvr2-autostart-monitor.service || true
 
 socket="$lock_dir/monado_comp_ipc"
+start_optional_services() {
+    systemctl --user start psvr2-fossvr-wayvr.service
+    if [[ "${PSVR2_CHAPERONE_ENABLE:-0}" == 1 ]]; then
+        if [[ -x "${PSVR2_CHAPERONE_BINARY}" ]]; then
+            systemctl --user start psvr2-chaperone.service || true
+        else
+            echo "PSVR2 chaperone is enabled but the AppImage is missing at ${PSVR2_CHAPERONE_BINARY}; run ./scripts/fetch-community-tools.sh"
+        fi
+    fi
+}
+
 if systemctl --user is-active --quiet psvr2-fossvr.service \
     && [[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket"; then
-    systemctl --user start psvr2-fossvr-wayvr.service
+    start_optional_services
     "$audio_helper" vr || true
     echo "PSVR2 already ready: ${PSVR2_REFRESH_RATE} Hz / ${PSVR2_RENDER_SCALE}% + WayVR."
     exit 0
@@ -102,12 +113,12 @@ is_monado_hmd_ready() {
     # Successful start signs: explicit headset enumeration and selected-system
     # success. These strings are stable across recent Monado log formats.
     if grep -Fq "Got devices:" <<<"$logs" && grep -Fq "Result: XRT_SUCCESS" <<<"$logs"; then
-        if grep -Fq "PS VR2 HMD" <<<"$logs"; then
+        if grep -Eq "PS VR2 HMD|SIE PS VR2|playstation_vr2_headset" <<<"$logs"; then
             return 0
         fi
     fi
 
-    if grep -Fq "head: PS VR2 HMD" <<<"$logs"; then
+    if grep -Eq "head: (SIE )?PS VR2|playstation_vr2_headset" <<<"$logs"; then
         return 0
     fi
 
@@ -138,40 +149,32 @@ is_monado_failed() {
 # probing can race that initialization. Wait for the service process to report
 # the fully-created HMD; WayVR starting successfully below is the IPC check.
 runtime_healthy=0
-for _ in $(seq 1 80); do
+for _ in $(seq 1 160); do
     if is_monado_hmd_ready "$service_pid"; then
         runtime_healthy=1
         break
     fi
 
-    if is_monado_failed "$service_pid"; then
-        echo "Monado startup reached a runtime creation failure" >&2
-        journalctl --user -u psvr2-fossvr.service -n 120 --no-pager >&2
-        systemctl --user stop psvr2-fossvr.service || true
-        exit 1
-    fi
-
+    # PSVR2 Toolkit can log a device-creation failure and recover internally
+    # after the USB function finishes waking. Do not kill that healthy retry.
     systemctl --user is-active --quiet psvr2-fossvr.service || break
     sleep 0.25
 done
 if (( ! runtime_healthy )); then
-    echo "Monado started but did not create the PSVR2 device" >&2
+    if is_monado_failed "$service_pid"; then
+        echo "Monado exhausted its PSVR2 device-creation retry window" >&2
+    else
+        echo "Monado started but did not create the PSVR2 device" >&2
+    fi
     journalctl --user -u psvr2-fossvr.service -n 80 --no-pager >&2
     systemctl --user stop psvr2-fossvr.service || true
     exit 1
 fi
 
-systemctl --user start psvr2-fossvr-wayvr.service
+start_optional_services
 sleep 1
 systemctl --user is-active --quiet psvr2-fossvr-wayvr.service || {
     journalctl --user -u psvr2-fossvr-wayvr.service -n 60 --no-pager >&2; exit 1;
 }
-if [[ "${PSVR2_CHAPERONE_ENABLE:-0}" == 1 ]]; then
-    if [[ -x "${PSVR2_CHAPERONE_BINARY}" ]]; then
-        systemctl --user start psvr2-chaperone.service || true
-    else
-        echo "PSVR2 chaperone is enabled but the AppImage is missing at ${PSVR2_CHAPERONE_BINARY}; run ./scripts/fetch-community-tools.sh"
-    fi
-fi
 "$audio_helper" vr || true
 echo "PSVR2 ready: ${PSVR2_REFRESH_RATE} Hz / ${PSVR2_RENDER_SCALE}% + WayVR."

@@ -118,7 +118,10 @@ uninstall_system() {
         /etc/udev/rules.d/71-psvr2-dgpu-power.rules \
         /etc/udev/rules.d/71-psvr2-gpu-profile.rules \
         /etc/systemd/system/psvr2-dgpu-power.service \
-        /usr/local/libexec/psvr2-dgpu-power
+        /etc/systemd/system/psvr2-usb-recover.service \
+        /etc/polkit-1/rules.d/49-psvr2-usb-recover.rules \
+        /usr/local/libexec/psvr2-dgpu-power \
+        /usr/local/libexec/psvr2-usb-recover
     systemctl daemon-reload
     udevadm control --reload-rules
     echo "PSVR2 system integration removed."
@@ -205,6 +208,10 @@ fi
 
 [[ ${EUID} -eq 0 ]] || { echo "Run --system with sudo." >&2; exit 1; }
 install -m 0644 "$repo_dir/udev/70-psvr2.rules" /etc/udev/rules.d/70-psvr2.rules
+install -d -m 0755 /usr/local/libexec /etc/polkit-1/rules.d
+install -m 0755 "$repo_dir/systemd/system/psvr2-usb-recover" /usr/local/libexec/
+install -m 0644 "$repo_dir/systemd/system/psvr2-usb-recover.service" /etc/systemd/system/
+install -m 0644 "$repo_dir/polkit/49-psvr2-usb-recover.rules" /etc/polkit-1/rules.d/
 if $framework; then
     mapfile -t dgpus < <(lspci -Dn | awk '$3 == "1002:7480" {
         address=$1
@@ -216,7 +223,6 @@ if $framework; then
         echo "Expected exactly one Framework RX 7700S (1002:7480), found ${#dgpus[@]}." >&2
         exit 1
     }
-    install -d /usr/local/libexec
     install -m 0755 "$repo_dir/systemd/system/psvr2-dgpu-power" /usr/local/libexec/
     sed "s|@DGPU_PCI_ADDRESS@|${dgpus[0]}|g" \
         "$repo_dir/systemd/system/psvr2-dgpu-power.service" \
