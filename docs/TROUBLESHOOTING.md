@@ -54,15 +54,17 @@ Hard runtime failures are also counted persistently at
 `$XDG_RUNTIME_DIR/psvr2-startup-failure-state` so each automatic restart uses
 the same recovery backoff instead of immediately re-entering a tight start loop.
 
-If startup still loops and logs:
+If startup stops after `Failed to claim interface 7` or never reaches `Got
+devices`, stop the stack, switch the headset off and back on, then start it
+again. The integration deliberately does not reset the USB device from
+software: on some host controllers that can leave the headset unconfigured
+until a physical power cycle.
 
-- `No builder selected in config (or wasn't compiled in)`  
-- `Selected psvr2 because it was certain it could create a head` followed by
-  `XRT_ERROR_DEVICE_CREATION_FAILED`
-
-that means the installed Monado binary was built without PlayStation VR2 support
-enabled. For Toolkit + Ignition, keep native Monado PSVR2 disabled as the
-community setup requires, and rebuild the SteamVR-driver bridge:
+If startup instead reports `No builder selected in config`, verify the same
+Toolkit + Ignition split used by the community setup: the SteamVR-driver bridge
+must be enabled, native Monado PSVR2 must remain disabled, and
+`LH_LOAD_PSVR2=1` must be present. Rebuild the pinned runtime if those settings
+are wrong:
 
 ```bash
 ./scripts/prepare-envision-runtime.sh
