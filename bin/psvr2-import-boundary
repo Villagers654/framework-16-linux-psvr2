@@ -20,11 +20,12 @@ target = pathlib.Path(sys.argv[2])
 with source.open("rb") as stream:
     data = json.load(stream)
 
-walls = next(
-    (u.get("collision_bounds") for u in data.get("universes", [])
+universe = next(
+    (u for u in data.get("universes", [])
      if isinstance(u, dict) and u.get("collision_bounds")),
     None,
 )
+walls = universe.get("collision_bounds") if universe else None
 if not walls:
     raise SystemExit(f"PSVR2 boundary import: no collision bounds in {source}")
 
@@ -65,6 +66,36 @@ for point in boundary:
 boundary = deduped
 if len(boundary) < 3:
     raise SystemExit("PSVR2 boundary import: resulting polygon has fewer than 3 points")
+
+# Sony stores collision vertices in the driver's raw tracking universe, while
+# Monado's steamvr_lh device applies the saved standing transform to every HMD
+# and controller pose before exposing STAGE. Apply the identical transform to
+# the polygon or the warning wall is anchored to a different coordinate system
+# than the tracked devices.
+standing = universe.get("standing") if isinstance(universe, dict) else None
+standing = standing if isinstance(standing, dict) else {}
+translation = standing.get("translation", [0.0, 0.0, 0.0])
+if not isinstance(translation, list):
+    translation = [0.0, 0.0, 0.0]
+translation = list(translation[:3]) + [0.0] * max(0, 3 - len(translation))
+try:
+    tx, tz = float(translation[0]), float(translation[2])
+    yaw = float(standing.get("yaw", 0.0))
+except (TypeError, ValueError):
+    raise SystemExit("PSVR2 boundary import: standing transform is not numeric")
+if not all(math.isfinite(value) for value in (tx, tz, yaw)):
+    raise SystemExit("PSVR2 boundary import: standing transform is not finite")
+
+# steamvr_lh constructs a quaternion around the negative Y axis, rotates the
+# standing translation, then pose-composes it with each raw device position:
+# stage_point = R(-yaw) * (raw_point + translation).
+cos_yaw = math.cos(-yaw)
+sin_yaw = math.sin(-yaw)
+boundary = [
+    (cos_yaw * (x + tx) + sin_yaw * (z + tz),
+     -sin_yaw * (x + tx) + cos_yaw * (z + tz))
+    for x, z in boundary
+]
 
 defaults = {
     "fade_start": 0.75,

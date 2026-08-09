@@ -20,6 +20,8 @@ fi
 
 socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc"
 game_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-game-active"
+game_registry_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-games"
+game_registration=""
 if [[ ! -S "$socket" ]] || ! ss -H -xl | grep -Fq "$socket"; then
     echo "Monado is active but its IPC socket is unavailable; repairing the runtime" >&2
     "$start_helper"
@@ -69,6 +71,7 @@ cleanup() {
         wait "$runtime_watcher" 2>/dev/null || true
     fi
     rm -f "$game_active_file"
+    [[ -z "$game_registration" ]] || rm -f -- "$game_registration"
     if systemctl --user is-active --quiet psvr2-fossvr.service; then
         systemctl --user restart psvr2-fossvr-wayvr.service || true
     fi
@@ -81,6 +84,12 @@ trap cleanup EXIT
 # cannot keep consuming the GPU underneath the restored WayVR dashboard.
 setsid "$@" &
 game_pid=$!
+install -d -m 0700 "$game_registry_dir"
+game_registration="$game_registry_dir/$BASHPID"
+registration_tmp="$game_registration.tmp"
+printf '%s %s\n' "$game_pid" "$(< /proc/sys/kernel/random/boot_id)" > "$registration_tmp"
+chmod 0600 "$registration_tmp"
+mv -f -- "$registration_tmp" "$game_registration"
 
 # If the headset monitor stops Monado because either cable disappears, end the
 # wrapped VR title as well instead of leaving Proton/Steam showing it as

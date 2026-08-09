@@ -37,11 +37,38 @@ grep -Fq '\[HMD\] (Jump|Lost)' bin/psvr2-room-setup
 grep -Fq 'systemctl --user stop psvr2-chaperone.service' bin/psvr2-room-setup
 grep -Fq 'required after *every*' bin/psvr2-room-setup
 grep -Fq 'while kill -0 -- "-$game_pid"' bin/psvr2-fossvr-run
+grep -Fq 'game_registration="$game_registry_dir/$BASHPID"' bin/psvr2-fossvr-run
+grep -Fq 'game_stop_helper="$helper_dir/psvr2-stop-games"' bin/psvr2-fossvr-stop
+bash -n bin/psvr2-stop-games
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
   "$work_dir/chaperone.toml"
 test "$(grep -c '^\[\[boundary\]\]$' "$work_dir/chaperone.toml")" = 4
 python3 -c 'import sys,tomllib; tomllib.load(open(sys.argv[1], "rb"))' \
   "$work_dir/chaperone.toml"
+bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone-offset.vrchap \
+  "$work_dir/chaperone-offset.toml"
+python3 - "$work_dir/chaperone-offset.toml" <<'PY'
+import math
+import sys
+import tomllib
+
+with open(sys.argv[1], "rb") as stream:
+    points = tomllib.load(stream)["boundary"]
+xs = [point["x"] for point in points]
+zs = [point["z"] for point in points]
+assert math.isclose(min(xs), -3.0, abs_tol=1e-6)
+assert math.isclose(max(xs), -1.0, abs_tol=1e-6)
+assert math.isclose(min(zs), 0.0, abs_tol=1e-6)
+assert math.isclose(max(zs), 2.0, abs_tol=1e-6)
+# A stationary headset at (-2, 1) is inside this transformed 2x2 m room.
+inside = False
+for first, second in zip(points, points[1:] + points[:1]):
+    if ((first["z"] > 1.0) != (second["z"] > 1.0)) and \
+       (-2.0 < (second["x"] - first["x"]) * (1.0 - first["z"]) /
+               (second["z"] - first["z"]) + first["x"]):
+        inside = not inside
+assert inside
+PY
 for patch in patches/*.patch; do
   git apply --stat "$patch" >/dev/null
 done
@@ -68,4 +95,5 @@ fi
 
 ./scripts/verify-reconnect-cycle.sh
 ./scripts/test-steam-sync.sh
+./scripts/test-stop-games.sh
 echo "Repository checks passed."

@@ -64,6 +64,11 @@ created automatically. The setup app writes the active `chaperone_info.vrchap`
 play area file that Monado reads at startup; this is the source of the in-headset
 play boundaries (not another runtime UI).
 
+The boundary importer applies the file's saved standing yaw and translation to
+the raw collision polygon, matching the transform applied to HMD and controller
+poses. The warning wall and tracked devices therefore share the same calibrated
+STAGE coordinates.
+
 Room Setup alone uses RiftLift xrizer's opt-in
 `RawAndUncalibrated` space, which removes the saved chaperone transform from
 the HMD pose so the Toolkit's raw passthrough-camera pose stays aligned. Games

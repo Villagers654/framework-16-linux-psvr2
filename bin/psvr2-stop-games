@@ -1,0 +1,97 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+registry_dir="${PSVR2_GAME_REGISTRY_DIR:-$runtime_dir/psvr2-games}"
+term_wait_steps="${PSVR2_GAME_STOP_WAIT_STEPS:-30}"
+term_wait_interval="${PSVR2_GAME_STOP_WAIT_INTERVAL:-0.1}"
+
+declare -A groups=()
+declare -A wrappers=()
+
+is_vr_wrapper() {
+    local pid=${1:-} token
+    [[ "$pid" =~ ^[0-9]+$ && -r "/proc/$pid/cmdline" ]] || return 1
+    while IFS= read -r -d '' token; do
+        [[ "$token" == */psvr2-fossvr-run || "$token" == psvr2-fossvr-run ]] && return 0
+    done < "/proc/$pid/cmdline"
+    return 1
+}
+
+remember_wrapper() {
+    local pid=${1:-} pgid
+    is_vr_wrapper "$pid" || return 0
+    pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]')
+    [[ "$pgid" =~ ^[0-9]+$ && "$pgid" -gt 1 ]] || return 0
+    wrappers["$pid"]=1
+    groups["$pgid"]=1
+}
+
+# New launchers register themselves atomically. The wrapper PID is the file
+# name; the process-group ID is the first field. Ignore stale registrations
+# from another boot and validate the live wrapper before trusting the group.
+boot_id=$(< /proc/sys/kernel/random/boot_id)
+if [[ -d "$registry_dir" ]]; then
+    shopt -s nullglob
+    for registration in "$registry_dir"/*; do
+        wrapper=${registration##*/}
+        read -r pgid registered_boot < "$registration" || true
+        if [[ "$registered_boot" == "$boot_id" ]] && is_vr_wrapper "$wrapper" && \
+            [[ "$pgid" =~ ^[0-9]+$ && "$pgid" -gt 1 ]]; then
+            wrappers["$wrapper"]=1
+            groups["$pgid"]=1
+        else
+            rm -f -- "$registration"
+        fi
+    done
+fi
+
+# Pick up games launched by an older installed wrapper, before registration
+# existed. Matching an exact argv token avoids killing unrelated Wine, Proton,
+# Steam, or shell processes whose command merely mentions PSVR2.
+if [[ -n "${PSVR2_LEGACY_WRAPPER_PIDS:-}" ]]; then
+    for wrapper in $PSVR2_LEGACY_WRAPPER_PIDS; do
+        remember_wrapper "$wrapper"
+    done
+else
+    for process in /proc/[0-9]*; do
+        remember_wrapper "${process##*/}"
+    done
+fi
+
+if (( ${#groups[@]} == 0 )); then
+    exit 0
+fi
+
+echo "Stopping ${#groups[@]} active PSVR2 game process group(s)."
+for wrapper in "${!wrappers[@]}"; do
+    kill -TERM "$wrapper" 2>/dev/null || true
+done
+for pgid in "${!groups[@]}"; do
+    kill -TERM -- "-$pgid" 2>/dev/null || true
+done
+
+for _ in $(seq 1 "$term_wait_steps"); do
+    alive=0
+    for pgid in "${!groups[@]}"; do
+        if kill -0 -- "-$pgid" 2>/dev/null; then
+            alive=1
+            break
+        fi
+    done
+    (( alive == 0 )) && break
+    sleep "$term_wait_interval"
+done
+
+for pgid in "${!groups[@]}"; do
+    if kill -0 -- "-$pgid" 2>/dev/null; then
+        echo "PSVR2 game process group $pgid did not exit; forcing it to stop." >&2
+        kill -KILL -- "-$pgid" 2>/dev/null || true
+    fi
+done
+
+if [[ -d "$registry_dir" ]]; then
+    for wrapper in "${!wrappers[@]}"; do
+        rm -f -- "$registry_dir/$wrapper"
+    done
+fi

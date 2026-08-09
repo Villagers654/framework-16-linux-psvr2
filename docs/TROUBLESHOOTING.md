@@ -166,6 +166,12 @@ warning cue only in this repo's Monado path; it does not hard-block movement.
 If a title appears to ignore the warning area, verify the Monado service is
 running and `psvr2-chaperone` is enabled in `settings.env`.
 
+If the walls appear to follow the headset or a physically in-bounds headset is
+reported outside, re-run `./install.sh --user` and restart
+`psvr2-chaperone.service`. The importer must transform Sony's raw collision
+vertices with the play area's saved `standing.translation` and `standing.yaw`;
+copying the vertices directly anchors the wall in the wrong tracking universe.
+
 ## Room Setup UI tracks correctly but passthrough is beside or behind you
 
 This is a raw-versus-standing tracking-universe mismatch, not lost Monado

@@ -5,12 +5,17 @@ helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 runtime_preflight="$helper_dir/psvr2-runtime-preflight"
 audio_helper="$helper_dir/psvr2-audio"
 controller_disconnect="$helper_dir/psvr2-controller-disconnect"
+game_stop_helper="$helper_dir/psvr2-stop-games"
 lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 exec 8>"$lock_dir/psvr2-fossvr-start.lock"
 flock 8
 if [[ "${PSVR2_AUTOMATED_STOP:-0}" != 1 ]]; then
     touch "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 fi
+# End games before tearing down the compositor. This lets them release OpenXR,
+# Vulkan, Wine, and Steam state cleanly; the helper escalates only PSVR2-owned
+# launch process groups that ignore SIGTERM.
+[[ ! -x "$game_stop_helper" ]] || "$game_stop_helper" || true
 systemctl --user stop psvr2-fossvr-wayvr.service
 systemctl --user stop psvr2-chaperone.service || true
 systemctl --user stop --no-block psvr2-fossvr.service
