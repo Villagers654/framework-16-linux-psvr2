@@ -1,9 +1,8 @@
 [Unit]
-Description=Periodically discover newly registered Steam VR games
+Description=Discover registered Steam VR games at session startup
 
 [Timer]
-OnBootSec=30s
-OnUnitActiveSec=30s
+OnStartupSec=30s
 AccuracySec=5s
 Unit=psvr2-steam-vr-sync.service
 

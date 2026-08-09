@@ -111,12 +111,12 @@ Power on the headset and controllers. The USB monitor starts Monado and WayVR,
 which opens directly to installed Steam VR games. Select a cover and Play.
 
 The WayVR game cache and Monado launch metadata are regenerated from Steam
-manifest changes whenever you install or remove titles. A lightweight periodic
-scan also discovers Steam VR-manifest entries, including non-Steam launchers such
-as Revive games, and reloads WayVR only when the library actually changes. A
+manifest changes whenever you install or remove titles. A session-start scan
+also discovers Steam VR-manifest entries, including non-Steam launchers such as
+Revive games; headset startup performs the same scan before WayVR opens. A
 session-wide Steam environment exports the active Monado runtime and xrizer
-bridge, so newly installed titles use the correct runtime immediately. For a
-manual refresh, run:
+bridge ensures newly installed titles use the correct runtime immediately. For
+a manual refresh during an existing session, run:
 
 ```bash
 psvr2-sync-steam-vr-games --discovery-only

@@ -203,10 +203,10 @@ off) while leaving the global 120 Hz / 170% PSVR2 target unchanged.
 
 ## Games do not appear in WayVR's Games tab after installation
 
-This cache is refreshed automatically from Steam app manifests and every 30
-seconds from Steam's VR manifest. The latter also covers registered non-Steam
-launchers such as Revive games. WayVR reloads only when the resulting library
-changes.
+This cache is refreshed automatically from Steam app manifest changes. Steam's
+VR manifest is scanned once at desktop-session startup and again whenever the
+headset runtime starts; this also covers registered non-Steam launchers such as
+Revive games. WayVR reloads only when the resulting library changes.
 
 If you installed new titles while already in VR and one is missing, run a non-
 intrusive refresh:
