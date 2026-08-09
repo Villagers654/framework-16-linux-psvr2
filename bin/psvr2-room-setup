@@ -34,6 +34,9 @@ service_since=$(systemctl --user show psvr2-fossvr.service \
     --property=ActiveEnterTimestamp --value)
 tracking_ready=false
 chaperone="$STEAM_ROOT/config/playstation_vr2/chaperone_info.vrchap"
+boundary_meta="$STEAM_ROOT/config/playstation_vr2/sceBoundaryMeta.bin"
+map_database="$STEAM_ROOT/config/playstation_vr2/sceMapDb.bin"
+calibration_files=("$chaperone" "$boundary_meta" "$map_database")
 if [[ ! -e "$chaperone" ]] || { \
     [[ -r "$chaperone" ]] \
     && grep -Eq '"play_area"[[:space:]]*:[[:space:]]*\[[[:space:]]*0([.]0+)?[[:space:]]*,[[:space:]]*0([.]0+)?[[:space:]]*\]' "$chaperone" \
@@ -45,6 +48,7 @@ else
     for _ in $(seq 1 60); do
         tracking_log=$(journalctl --user -u psvr2-fossvr.service \
             --since "$service_since" --no-pager 2>/dev/null \
+            | grep -E 'TrackingStatus|\[HMD\] (Track|Jump|Lost)|map registration error' \
             | tail -n 400 || true)
         # Older releases explicitly transitioned to "stable". The current
         # Sony bridge instead remains in its map-search state while publishing
@@ -104,12 +108,20 @@ roomsetup_env+=("XRIZER_RAW_CHAPERONE_PATH=$STEAM_ROOT/config/playstation_vr2/ch
 # origin with the new boundary and can put the floor above the user's head.
 # Watch for a complete, stable chaperone write, close the now-stale setup
 # process, and reload the runtime so every component adopts the same origin.
-chaperone_digest() {
-    if [[ -r "$chaperone" ]]; then
-        sha256sum "$chaperone" | cut -d ' ' -f 1
+file_digest() {
+    local file=$1
+    if [[ -r "$file" ]]; then
+        sha256sum "$file" | cut -d ' ' -f 1
     else
         printf 'missing\n'
     fi
+}
+
+calibration_digest() {
+    local file
+    for file in "${calibration_files[@]}"; do
+        printf '%s:%s\n' "$(basename "$file")" "$(file_digest "$file")"
+    done
 }
 
 valid_play_area() {
@@ -118,7 +130,17 @@ valid_play_area() {
         && ! grep -Eq '"play_area"[[:space:]]*:[[:space:]]*\[[[:space:]]*0([.]0+)?[[:space:]]*,[[:space:]]*0([.]0+)?[[:space:]]*\]' "$chaperone"
 }
 
-initial_digest=$(chaperone_digest)
+# Room Setup commits the boundary polygon, its universe metadata, and the
+# camera relocalization map separately. Preserve the last complete set before
+# starting so an interrupted save can never replace a working calibration.
+backup_root="$PSVR2_SETUP_ROOT/room-calibration-backups"
+backup_dir="$backup_root/$(date +%Y%m%d-%H%M%S)"
+install -d -m 0700 "$backup_dir"
+for file in "${calibration_files[@]}"; do
+    [[ ! -e "$file" ]] || cp -a -- "$file" "$backup_dir/"
+done
+
+initial_digest=$(calibration_digest)
 
 env "${roomsetup_env[@]}" \
     "$helper_dir/psvr2-fossvr-run" \
@@ -129,15 +151,28 @@ candidate_digest=
 stable_checks=0
 
 while kill -0 "$runner_pid" 2>/dev/null; do
-    current_digest=$(chaperone_digest)
-    if [[ "$current_digest" != "$initial_digest" ]] && valid_play_area; then
+    current_digest=$(calibration_digest)
+    all_state_present=true
+    for file in "${calibration_files[@]}"; do
+        [[ -s "$file" ]] || all_state_present=false
+    done
+    all_state_changed=true
+    while IFS= read -r initial_line; do
+        grep -Fxq "$initial_line" <<<"$current_digest" && all_state_changed=false
+    done <<<"$initial_digest"
+
+    if [[ "$all_state_present" == true && "$all_state_changed" == true ]] \
+        && valid_play_area; then
         if [[ "$current_digest" == "$candidate_digest" ]]; then
             ((stable_checks += 1))
         else
             candidate_digest=$current_digest
             stable_checks=1
         fi
-        if (( stable_checks >= 6 )); then
+        # The map is roughly 20 MiB and is flushed after the small JSON and
+        # metadata files. Require ten seconds with no changes across the
+        # complete set before allowing the runtime reload to consume it.
+        if (( stable_checks >= 20 )); then
             calibration_changed=true
             kill -TERM "$runner_pid" 2>/dev/null || true
             break
@@ -153,6 +188,24 @@ set +e
 wait "$runner_pid"
 setup_status=$?
 set -e
+
+if [[ "$calibration_changed" != true ]] && [[ "$(calibration_digest)" != "$initial_digest" ]]; then
+    # A partial transaction is worse than an old but internally consistent
+    # room map. Restore only files that existed in the pre-run snapshot and
+    # remove newly-created fragments before restarting the runtime.
+    for file in "${calibration_files[@]}"; do
+        saved="$backup_dir/$(basename "$file")"
+        if [[ -e "$saved" ]]; then
+            cp -a -- "$saved" "$file"
+        else
+            rm -f -- "$file"
+        fi
+    done
+    notify-send -u critical 'PSVR2 play area was not saved' \
+        'Room Setup did not commit a complete spatial map; the previous calibration was restored.' \
+        2>/dev/null || true
+    setup_status=1
+fi
 
 if [[ "$calibration_changed" == true ]]; then
     notify-send 'PSVR2 play area saved' \

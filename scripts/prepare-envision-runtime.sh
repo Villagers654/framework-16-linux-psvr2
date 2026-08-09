@@ -23,6 +23,7 @@ monado_patches=(
   "$repo/patches/monado-openvr-controller-tracking.patch"
   "$repo/patches/monado-ipc-input-filter.patch"
   "$repo/patches/monado-psvr2-usb-recovery.patch"
+  "$repo/patches/monado-spectator-mirror.patch"
   "$repo/patches/monado-stage-bounds.patch"
 )
 unapply_managed_patches() {

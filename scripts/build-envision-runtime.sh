@@ -44,7 +44,7 @@ cmake -S "$monado_source" -B "$build_dir" -G Ninja \
   -DUDEV_LIBRARY="$udev_prefix/lib/libudev.so" \
   -DVulkan_INCLUDE_DIR="$brew_prefix/include" \
   -DVulkan_LIBRARY="$brew_prefix/lib/libvulkan.so" \
-  -DXRT_FEATURE_DEBUG_GUI=OFF \
+  -DXRT_FEATURE_DEBUG_GUI=ON \
   -DXRT_FEATURE_OPENXR=ON \
   -DXRT_FEATURE_SERVICE=ON \
   -DXRT_BUILD_DRIVER_PSSENSE=ON \
@@ -55,6 +55,7 @@ cache="$build_dir/CMakeCache.txt"
 for required in \
   XRT_BUILD_DRIVER_PSSENSE \
   XRT_BUILD_DRIVER_STEAMVR_LIGHTHOUSE \
+  XRT_FEATURE_DEBUG_GUI \
   XRT_FEATURE_OPENXR \
   XRT_FEATURE_SERVICE; do
   grep -Eq "^${required}(:[^=]+)?=ON$" "$cache" || {
@@ -66,11 +67,6 @@ grep -Eq '^XRT_BUILD_DRIVER_PSVR2(:[^=]+)?=OFF$' "$cache" || {
   echo "Native Monado PSVR2 must be disabled when Toolkit + Ignition is selected" >&2
   exit 1
 }
-grep -Eq '^XRT_FEATURE_DEBUG_GUI(:[^=]+)?=OFF$' "$cache" || {
-  echo "Monado debug GUI must remain disabled in the production runtime" >&2
-  exit 1
-}
-
 LIBRARY_PATH="$brew_prefix/lib" cmake --build "$build_dir"
 cmake --install "$build_dir"
 

@@ -158,6 +158,9 @@ required.
 ## Everyday use
 
 - Power on/connect PSVR2: the runtime and game launcher start automatically.
+- A fullscreen, GPU-native left-eye spectator view opens on the laptop display
+  by default and closes with the runtime. Set `PSVR2_SPECTATOR_ENABLE=0` in
+  `settings.env` for headset-only output.
 - Turn controllers on before or after headset launch: WayVR starts without
   blocking. Controllers can appear live over Bluetooth + HID; no Monado restart
   is required just to expose roles.
@@ -170,7 +173,8 @@ required.
   `~/Pictures/VR Screenshots/`.
 - Select **Games**: only detected Steam VR titles are listed.
 - Select **PSVR2 Room Setup**: run full room-scale calibration from the headset.
-  This writes `chaperone_info.vrchap` for the active play area.
+  This atomically validates the boundary, boundary metadata, and spatial map;
+  an interrupted or incomplete save restores the previous complete set.
 - Select **Applications**: launch desktop applications or view the GNOME desktop.
 - Exit a game or Room Setup: the wrapper restores WayVR directly to the Games
   dashboard while keeping Monado and the calibrated tracking origin alive.

@@ -83,11 +83,13 @@ and WayVR continue to use the calibrated STAGE space.
 Finish the wizard to write the full room-scale boundary. This project does not
 substitute standing-only calibration.
 
-When the wizard saves a changed play area, the launcher closes Room Setup and
-reloads Monado automatically before returning to WayVR. This is required
-because the PSVR2 driver and xrizer both capture the standing/raw transform at
-process startup; without the reload, a newly saved boundary can appear above
-or below the user until the next VR-runtime restart.
+When the wizard saves a changed play area, the launcher waits for all three
+driver state files—`chaperone_info.vrchap`, `sceBoundaryMeta.bin`, and
+`sceMapDb.bin`—to change and remain stable for ten seconds before closing Room
+Setup and reloading Monado. The set is backed up before calibration; an
+interrupted or partial transaction is rejected and the previous complete set
+is restored. The reload is required because the PSVR2 driver and xrizer both
+capture the standing/raw transform at process startup.
 
 ## 5. Oculus-style visual boundary overlay
 

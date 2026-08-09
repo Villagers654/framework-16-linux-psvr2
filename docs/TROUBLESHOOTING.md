@@ -172,11 +172,22 @@ If a title appears to ignore the warning area, verify the Monado service is
 running and `psvr2-chaperone` is enabled in `settings.env`.
 
 If the walls appear to follow the headset or a physically in-bounds headset is
-reported outside, re-run `./install.sh --user` and restart
-`psvr2-chaperone.service`. The importer must copy Sony's collision vertices
-directly because they are already in standing/STAGE coordinates. Applying the
-play area's `standing.translation` and `standing.yaw` again double-transforms
-the warning polygon and anchors it in the wrong place.
+reported outside, inspect the Monado log first. `force 3DoF ON` or
+`fake Position ON` means positional tracking failed upstream; restarting the
+overlay cannot fix it. Re-run PSVR2 Room Setup so its boundary, metadata, and
+spatial map are committed together. The launcher backs up the previous set and
+refuses partial saves. If tracking is healthy but the polygon alone is
+misplaced, re-run `./install.sh --user` and restart
+`psvr2-chaperone.service`.
+
+## Spectator view is missing
+
+The fullscreen left-eye mirror is enabled by default and is rendered from
+Monado's existing compositor image without desktop capture. Confirm
+`PSVR2_SPECTATOR_ENABLE=1` in `~/.config/psvr2-linux/settings.env`, rebuild the
+pinned runtime with `./scripts/prepare-envision-runtime.sh` followed by
+`./scripts/build-envision-runtime.sh`, and restart the VR stack. The mirror is
+part of `psvr2-fossvr.service`, so disconnect teardown closes it automatically.
 
 ## Room Setup UI tracks correctly but passthrough is beside or behind you
 

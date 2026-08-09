@@ -176,8 +176,10 @@ if [[ "$mode" == user ]]; then
                 "$HOME/.config/psvr2-linux/settings.env"
         fi
     fi
-    sed -i -e '/^PSVR2_SPECTATOR_ENABLE=/d' \
-        -e '/^PSVR2_LOAD_PSVR2_SENSE=/d' \
+    if ! grep -q '^PSVR2_SPECTATOR_ENABLE=' "$HOME/.config/psvr2-linux/settings.env"; then
+        sed -i '1iPSVR2_SPECTATOR_ENABLE=1' "$HOME/.config/psvr2-linux/settings.env"
+    fi
+    sed -i -e '/^PSVR2_LOAD_PSVR2_SENSE=/d' \
         -e '/^PSVR2_REFRESH_RATE=/d' \
         -e '/^PSVR2_USB_RECOVERY_COOLDOWN_SECONDS=/d' \
         "$HOME/.config/psvr2-linux/settings.env"
