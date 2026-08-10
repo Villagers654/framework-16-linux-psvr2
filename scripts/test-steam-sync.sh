@@ -148,10 +148,11 @@ def fake_run(command, **_kwargs):
     return SimpleNamespace(returncode=0, stdout="", stderr="")
 
 steam_sync.subprocess.run = fake_run
-steam_sync.GAME_ACTIVE.touch()
+steam_sync.GAME_REGISTRY.mkdir()
+(steam_sync.GAME_REGISTRY / "launch").touch()
 steam_sync.restart_wayvr_dashboard()
 assert calls == [], calls
-steam_sync.GAME_ACTIVE.unlink()
+(steam_sync.GAME_REGISTRY / "launch").unlink()
 steam_sync.restart_wayvr_dashboard()
 assert calls[-1] == [
     "systemctl", "--user", "restart", "psvr2-fossvr-wayvr.service"

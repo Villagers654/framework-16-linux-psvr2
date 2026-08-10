@@ -42,34 +42,45 @@
      sync::{Arc, atomic::Ordering},
      time::{Duration, Instant},
  };
-@@ -185,6 +186,11 @@
+@@ -185,6 +186,12 @@
      let mut environment_blend_mode = modes[0];
      let mut last_frame_time = Instant::now();
      let mut screenshot_chord = ScreenshotChord::default();
-+    let game_active_marker = std::env::var_os("XDG_RUNTIME_DIR")
++    let game_registry = std::env::var_os("XDG_RUNTIME_DIR")
 +        .map(PathBuf::from)
-+        .map(|dir| dir.join("psvr2-game-active"));
++        .map(|dir| dir.join("psvr2-games"));
 +    let mut game_active = None;
++    let mut dashboard_hide_until = None;
 +    let mut next_game_active_check = Instant::now();
      let mut device_refresh_interval;
      let mut device_refresh_fails = 0u8;
  
-@@ -194,6 +200,23 @@
+@@ -194,6 +201,33 @@
          last_frame_time = now;
          let cur_frame = FRAME_COUNTER.fetch_add(1, Ordering::Relaxed);
  
 +        if next_game_active_check <= now {
-+            if let Some(marker) = game_active_marker.as_ref() {
-+                let active = marker.exists();
++            if let Some(registry) = game_registry.as_ref() {
++                let active = registry
++                    .read_dir()
++                    .map(|mut entries| entries.any(|entry| entry.is_ok()))
++                    .unwrap_or(false);
 +                if game_active != Some(active) {
 +                    // Preserve WayVR's normal startup state when no game is active,
 +                    // but hide on an active launch/restart and restore on game exit.
-+                    if game_active.is_some() || active {
++                    if active {
++                        dashboard_hide_until = Some(now + Duration::from_secs(2));
++                    } else if game_active == Some(true) {
 +                        app.tasks.enqueue(TaskType::Overlay(
-+                            OverlayTask::SetDashboardVisible(!active),
++                            OverlayTask::SetDashboardVisible(true),
 +                        ));
 +                    }
 +                    game_active = Some(active);
++                }
++                if active && dashboard_hide_until.is_some_and(|deadline| now <= deadline) {
++                    app.tasks.enqueue(TaskType::Overlay(
++                        OverlayTask::SetDashboardVisible(false),
++                    ));
 +                }
 +            }
 +            next_game_active_check = now + Duration::from_millis(250);

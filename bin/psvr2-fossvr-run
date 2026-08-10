@@ -19,7 +19,6 @@ if ! systemctl --user is-active --quiet psvr2-fossvr.service ||
 fi
 
 socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc"
-game_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-game-active"
 game_registry_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-games"
 game_registration=""
 game_scope="psvr2-game-$BASHPID.scope"
@@ -54,11 +53,6 @@ fi
 export vblank_mode=0
 export MESA_VK_WSI_PRESENT_MODE=immediate
 
-# Keep WayVR's OpenXR overlay session alive while the primary application runs.
-# The dashboard, watch, notifications, and controller shortcuts are compositor
-# layers, so stopping WayVR here makes every one of them unavailable in-game.
-touch "$game_active_file"
-
 game_pid=""
 runtime_watcher=""
 forward_signal() {
@@ -70,7 +64,6 @@ cleanup() {
         kill "$runtime_watcher" 2>/dev/null || true
         wait "$runtime_watcher" 2>/dev/null || true
     fi
-    rm -f "$game_active_file"
     [[ -z "$game_registration" ]] || rm -f -- "$game_registration"
     if systemctl --user is-active --quiet psvr2-fossvr.service &&
        ! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then

@@ -23,7 +23,7 @@ if CONFIG.exists():
         STEAM = Path(os.path.expandvars(match.group(1))).expanduser()
 STATE = HOME / ".local/share/psvr2-setup/steam-vr-apps.json"
 RUNTIME_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
-GAME_ACTIVE = RUNTIME_DIR / "psvr2-game-active"
+GAME_REGISTRY = RUNTIME_DIR / "psvr2-games"
 VR_MANIFEST = STEAM / "config/steamapps.vrmanifest"
 WRAPPER = str(HOME / ".local/bin/psvr2-fossvr-run")
 LOCAL_RIFTLIFT = HOME / ".local/bin/riftlift"
@@ -294,7 +294,11 @@ def restart_wayvr_dashboard() -> None:
         )
         return
 
-    if GAME_ACTIVE.exists():
+    try:
+        game_active = any(path.is_file() for path in GAME_REGISTRY.iterdir())
+    except OSError:
+        game_active = False
+    if game_active:
         print("PSVR2: a VR game is active; deferring the WayVR dashboard refresh.")
         return
 
