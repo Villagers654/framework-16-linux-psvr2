@@ -41,6 +41,10 @@ export OXR_ZERO_TIME_IS_NOW=1
 # compatibility switch is inert on parallel headsets and avoids per-title
 # launch exceptions for affected OpenXR and translated OpenVR applications.
 export OXR_PARALLEL_VIEWS=1
+# Newer Unity OpenXR releases can mark opaque projection layers as source-alpha
+# blended while storing bloom data in alpha. Let Monado ignore that invalid flag
+# so the eye image matches the game's desktop mirror instead of rendering black.
+export OXR_NO_TEXTURE_SOURCE_ALPHA=1
 export PRESSURE_VESSEL_FILESYSTEMS_RW="$socket${PRESSURE_VESSEL_FILESYSTEMS_RW:+:$PRESSURE_VESSEL_FILESYSTEMS_RW}"
 # Keep every game-side Vulkan/DXVK device on the same dGPU as Monado. Hybrid
 # systems otherwise let secondary DLLs select the iGPU, which deadlocks shared
