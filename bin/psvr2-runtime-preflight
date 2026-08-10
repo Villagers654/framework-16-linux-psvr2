@@ -11,6 +11,15 @@ if [[ -x "$wineserver" && -d "$prefix" ]]; then
     WINEPREFIX="$prefix" "$wineserver" -k 2>/dev/null || true
 fi
 
+cleanup_ignition_ipc() {
+    # Ignition creates a unique POSIX shared-memory channel on every launch.
+    # Crashes cannot unlink it, and enough abandoned channels eventually make
+    # the next Sony driver provider time out during its first RPC call. Only
+    # remove this user's transient objects after every Ignition process exits.
+    find /dev/shm -xdev -maxdepth 1 -type f -user "$(id -u)" \
+        \( -name 'ignition_ipc_*' -o -name 'sem.ignition_ipc_*' \) -delete
+}
+
 for _ in $(seq 1 30); do
     stale=false
     for proc in /proc/[0-9]*/cmdline; do
@@ -19,6 +28,12 @@ for _ in $(seq 1 30); do
             stale=true; break
         fi
     done
-    $stale || exit 0
+    if ! $stale; then
+        cleanup_ignition_ipc
+        exit 0
+    fi
     sleep 0.1
 done
+
+echo "Ignition did not stop before the runtime preflight timeout" >&2
+exit 1
