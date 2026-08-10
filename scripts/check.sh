@@ -41,7 +41,22 @@ grep -Fq 'game_registration="$game_registry_dir/$BASHPID"' bin/psvr2-fossvr-run
 ! grep -Fq 'systemctl --user stop psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
 grep -Fq '! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
 grep -Fq 'game_stop_helper="$helper_dir/psvr2-stop-games"' bin/psvr2-fossvr-stop
+grep -Fq '"$usb_reset_helper"' bin/psvr2-autostart-monitor
 bash -n bin/psvr2-stop-games
+usb_reset_root="$work_dir/usb-reset"
+usb_reset_log="$work_dir/usb-reset.log"
+install -d "$usb_reset_root/2-2.3"
+printf '054c' > "$usb_reset_root/2-2.3/idVendor"
+printf '0cde' > "$usb_reset_root/2-2.3/idProduct"
+printf '5000' > "$usb_reset_root/2-2.3/speed"
+printf '13' > "$usb_reset_root/2-2.3/bNumInterfaces"
+printf '2' > "$usb_reset_root/2-2.3/busnum"
+printf '12' > "$usb_reset_root/2-2.3/devnum"
+PSVR2_USB_ROOT="$usb_reset_root" \
+PSVR2_USBRESET_BIN="$repo/tests/fixtures/usbreset" \
+PSVR2_USB_RESET_SKIP_RUNTIME_CHECK=1 \
+PSVR2_USBRESET_LOG="$usb_reset_log" bin/psvr2-usb-reset
+grep -Fxq '002/012' "$usb_reset_log"
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
   "$work_dir/chaperone.toml"
 test "$(grep -c '^\[\[boundary\]\]$' "$work_dir/chaperone.toml")" = 4

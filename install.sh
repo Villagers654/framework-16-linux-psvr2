@@ -194,7 +194,6 @@ if [[ "$mode" == user ]]; then
     fi
     sed -i -e '/^PSVR2_LOAD_PSVR2_SENSE=/d' \
         -e '/^PSVR2_REFRESH_RATE=/d' \
-        -e '/^PSVR2_USB_RECOVERY_COOLDOWN_SECONDS=/d' \
         "$HOME/.config/psvr2-linux/settings.env"
     chmod 0600 "$HOME/.config/psvr2-linux/settings.env"
 

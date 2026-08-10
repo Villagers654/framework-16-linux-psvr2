@@ -18,6 +18,7 @@ startup_retry_attempts=${PSVR2_STARTUP_RETRY_ATTEMPTS:-3}
 runtime_failure_streak_threshold=${PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD:-2}
 runtime_recovery_cooldown=${PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS:-90}
 runtime_retry_cooldown=${PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS:-$runtime_recovery_cooldown}
+usb_recovery_cooldown=${PSVR2_USB_RECOVERY_COOLDOWN_SECONDS:-8}
 tracking_loss_checks=${PSVR2_TRACKING_LOSS_CHECKS:-3}
 tracking_recovery_checks=${PSVR2_TRACKING_RECOVERY_CHECKS:-3}
 tracking_restart_seconds=${PSVR2_TRACKING_RESTART_SECONDS:-60}
@@ -31,6 +32,7 @@ connection_state_file="${PSVR2_CONNECTION_STATE_FILE:-}"
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
 start_helper="$helper_dir/psvr2-fossvr-start"
 stop_helper="$helper_dir/psvr2-fossvr-stop"
+usb_reset_helper="$helper_dir/psvr2-usb-reset"
 bluetoothctl_bin=$(command -v bluetoothctl 2>/dev/null || true)
 next_retry=0
 runtime_failure_streak=0
@@ -305,6 +307,7 @@ runtime_failure_log_contains_usb_wake_failure() {
 
 full_recovery_cycle() {
     local recover_usb=${1:-0}
+    local cooldown=$runtime_retry_cooldown
     if [[ "$recover_usb" == 1 ]]; then
         echo "PSVR2 startup hit a hard USB wake failure; recycling the software stack"
     else
@@ -318,11 +321,17 @@ full_recovery_cycle() {
     [[ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc" ]] && rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/monado_comp_ipc"
     systemctl --user stop monado.service monado.socket 2>/dev/null || true
     if [[ "$recover_usb" == 1 && "${PSVR2_TEST_MODE:-0}" != "1" ]]; then
-        echo "PSVR2 USB did not wake cleanly; power-cycle the headset if the software retry fails" >&2
+        echo "Resetting the unresponsive PSVR2 USB function before retrying"
+        if [[ -x "$usb_reset_helper" ]] && "$usb_reset_helper"; then
+            cooldown=$usb_recovery_cooldown
+        else
+            echo "Automatic PSVR2 USB recovery failed; using a software-only retry" >&2
+        fi
     fi
     sleep 3
     clear_runtime_failure_state
-    set_runtime_cooldown "$runtime_retry_cooldown"
+    set_runtime_cooldown "$cooldown"
+    next_retry=$((SECONDS + cooldown))
 }
 
 start_runtime() {
@@ -364,7 +373,6 @@ start_runtime() {
         echo "PSVR2 runtime was not healthy; retrying after cleanup" >&2
         if runtime_failure_log_contains_usb_wake_failure "$failure_since"; then
             full_recovery_cycle 1
-            next_retry=$((SECONDS + runtime_retry_cooldown))
             return 1
         fi
         if runtime_failure_log_contains_critical_failure 220 "$failure_since"; then
@@ -372,7 +380,6 @@ start_runtime() {
             persist_runtime_failure_state
             if (( runtime_failure_streak >= runtime_failure_streak_threshold )); then
                 full_recovery_cycle 0
-                next_retry=$((SECONDS + runtime_recovery_cooldown))
                 return 1
             fi
             set_runtime_cooldown "$runtime_retry_cooldown"

@@ -158,6 +158,9 @@ required.
 ## Everyday use
 
 - Power on/connect PSVR2: the runtime and game launcher start automatically.
+- If the headset enumerates but its USB endpoints fail during driver wake-up,
+  the monitor performs one device-scoped USB port reset and retries without
+  requiring root, unplugging the adapter, or resetting the surrounding hub.
 - A fullscreen, undistorted full-left-eye spectator view opens on the laptop display
   by default and closes with the runtime. Set `PSVR2_SPECTATOR_ENABLE=0` in
   `settings.env` for headset-only output.

@@ -1,0 +1,48 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+# Reset only the fully enumerated PSVR2 SuperSpeed function. The udev rule gives
+# the active desktop user access to this device, so no root or sysfs writes are
+# needed. USBDEVFS_RESET is narrower and safer than deauthorizing a USB tree.
+usb_root=${PSVR2_USB_ROOT:-/sys/bus/usb/devices}
+usbreset_bin=${PSVR2_USBRESET_BIN:-$(command -v usbreset 2>/dev/null || true)}
+required_interfaces=${PSVR2_USB_INTERFACE_MINIMUM:-11}
+
+[[ -x "$usbreset_bin" ]] || {
+    echo "usbreset is required for automatic PSVR2 USB recovery" >&2
+    exit 1
+}
+
+if [[ "${PSVR2_USB_RESET_SKIP_RUNTIME_CHECK:-0}" != 1 ]] \
+    && systemctl --user is-active --quiet psvr2-fossvr.service; then
+    echo "Refusing to reset PSVR2 USB while Monado is active" >&2
+    exit 1
+fi
+
+for _ in $(seq 1 10); do
+    devices=()
+    for candidate in "$usb_root"/*; do
+        [[ -r "$candidate/idVendor" && -r "$candidate/idProduct" ]] || continue
+        [[ "$(<"$candidate/idVendor"):$(<"$candidate/idProduct")" == 054c:0cde ]] || continue
+        [[ -r "$candidate/speed" && -r "$candidate/bNumInterfaces" ]] || continue
+        speed=$(<"$candidate/speed")
+        interfaces=$(<"$candidate/bNumInterfaces")
+        awk -v speed="$speed" 'BEGIN { exit !(speed >= 5000) }' || continue
+        [[ "$interfaces" =~ ^[0-9]+$ ]] || continue
+        (( interfaces >= required_interfaces )) || continue
+        [[ -r "$candidate/busnum" && -r "$candidate/devnum" ]] || continue
+        busnum=$(<"$candidate/busnum")
+        devnum=$(<"$candidate/devnum")
+        [[ "$busnum" =~ ^[0-9]+$ && "$devnum" =~ ^[0-9]+$ ]] || continue
+        devices+=("$(printf '%03d/%03d' "$((10#$busnum))" "$((10#$devnum))")")
+    done
+
+    if (( ${#devices[@]} == 1 )) && "$usbreset_bin" "${devices[0]}"; then
+        echo "Reset PSVR2 USB function ${devices[0]}."
+        exit 0
+    fi
+    sleep 0.5
+done
+
+echo "Could not reset one fully enumerated PSVR2 USB function" >&2
+exit 1

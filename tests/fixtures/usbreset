@@ -1,0 +1,3 @@
+#!/usr/bin/bash
+set -euo pipefail
+printf '%s\n' "$1" > "$PSVR2_USBRESET_LOG"
