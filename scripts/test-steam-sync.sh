@@ -9,6 +9,13 @@ steam="$test_home/Steam"
 install -d -m 0755 "$test_home/.config/psvr2-linux" \
   "$test_home/.local/bin" "$steam/steamapps" "$steam/config" "$steam/userdata/1/config"
 install -m 0755 /dev/null "$test_home/.local/bin/psvr2-fossvr-run"
+cat > "$test_home/.local/bin/riftlift" <<'EOF'
+#!/usr/bin/bash
+if [[ ${1:-} == steam-oculus-ids ]]; then
+  echo 1920760
+fi
+EOF
+chmod 0755 "$test_home/.local/bin/riftlift"
 
 cat > "$test_home/.config/psvr2-linux/settings.env" <<EOF
 STEAM_ROOT="$steam"
@@ -34,6 +41,15 @@ cat > "$steam/steamapps/appmanifest_250820.acf" <<'EOF'
 	"installdir"		"SteamVR"
 }
 EOF
+cat > "$steam/steamapps/appmanifest_1920760.acf" <<'EOF'
+"AppState"
+{
+	"appid"		"1920760"
+	"name"		"StereoPaint"
+	"StateFlags"		"4"
+	"installdir"		"StereoPaint"
+}
+EOF
 cat > "$steam/userdata/1/config/localconfig.vdf" <<'EOF'
 "UserLocalConfigStore"
 {
@@ -46,6 +62,9 @@ cat > "$steam/userdata/1/config/localconfig.vdf" <<'EOF'
 				"apps"
 				{
 					"341800"
+					{
+					}
+					"1920760"
 					{
 					}
 				}
@@ -91,11 +110,13 @@ HOME="$test_home" PSVR2_SYNC_RESTART_DASHBOARD=0 \
   python3 "$repo/bin/psvr2-sync-steam-vr-games" --force
 
 state="$test_home/.local/share/psvr2-setup/steam-vr-apps.json"
-jq -e '."341800" == true and ."250820" == false and ."2600304528" == true' "$state" >/dev/null
+jq -e '."341800" == true and ."1920760" == true and ."250820" == false and ."2600304528" == true' "$state" >/dev/null
 expected_command="$test_home/.local/bin/psvr2-fossvr-run '$local_vr_launcher'"
 test "$(HOME="$test_home" python3 "$repo/bin/psvr2-launch-registered-vr" --check 2600304528)" = \
   "$expected_command"
 grep -Fq "$test_home/.local/bin/psvr2-fossvr-run %command%" \
+  "$steam/userdata/1/config/localconfig.vdf"
+grep -Fq "$test_home/.local/bin/psvr2-fossvr-run $test_home/.local/bin/riftlift launch-steam 1920760 -- %command%" \
   "$steam/userdata/1/config/localconfig.vdf"
 grep -Fq '"name"		"proton_experimental"' "$steam/config/config.vdf"
 test -f "$steam/userdata/1/config/localconfig.vdf.psvr2-auto-backup"
