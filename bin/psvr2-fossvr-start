@@ -171,8 +171,13 @@ for _ in $(seq 1 160); do
         break
     fi
 
-    # PSVR2 Toolkit can log a device-creation failure and recover internally
-    # after the USB function finishes waking. Do not kill that healthy retry.
+    # Once Monado publishes a terminal system/device-creation failure, the
+    # current process cannot turn into a usable OpenXR runtime. Return
+    # immediately so the monitor can reset a wedged PSVR2 USB function instead
+    # of idling through the rest of this 40-second health window.
+    if is_monado_failed "$service_pid"; then
+        break
+    fi
     systemctl --user is-active --quiet psvr2-fossvr.service || break
     sleep 0.25
 done
