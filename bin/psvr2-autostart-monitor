@@ -23,7 +23,6 @@ tracking_recovery_checks=${PSVR2_TRACKING_RECOVERY_CHECKS:-3}
 tracking_restart_seconds=${PSVR2_TRACKING_RESTART_SECONDS:-60}
 required_usb_interfaces=${PSVR2_USB_INTERFACE_MINIMUM:-11}
 suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
-game_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-game-active"
 room_setup_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-room-setup-active"
 cooldown_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-startup-cooldown"
 runtime_failure_state_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-startup-failure-state"
@@ -478,7 +477,6 @@ while true; do
         fi
         if is_runtime_active \
             && (( ! tracking_suspended )) \
-            && [[ ! -e "$game_active_file" ]] \
             && ! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then
             echo "PSVR2 WayVR dashboard is not running while runtime is active; restarting it"
             systemctl --user restart psvr2-fossvr-wayvr.service || true

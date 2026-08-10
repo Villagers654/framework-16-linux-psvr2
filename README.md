@@ -183,8 +183,13 @@ required.
   successful set becomes the authoritative calibration restored on every
   future runtime start.
 - Select **Applications**: launch desktop applications or view the GNOME desktop.
-- Exit a game or Room Setup: the wrapper restores WayVR directly to the Games
-  dashboard while keeping Monado and the calibrated tracking origin alive.
+- WayVR remains an active OpenXR overlay during every wrapped game, so its
+  watch, notifications, controller shortcuts, and PS-button dashboard remain
+  available in native OpenXR, XRizer/OpenVR, and RiftLift/Revive titles.
+- A successful launch dismisses the dashboard automatically; either PS button
+  opens it again without leaving the game.
+- Exit a game or Room Setup: WayVR returns directly to the Games dashboard
+  while Monado and the calibrated tracking origin stay alive.
 - Disconnect the headset's USB, DisplayPort, adapter power, or headset cable:
   the active VR title, WayVR, Monado, and Ignition helper close automatically,
   and the previous desktop audio output is restored. Steam itself stays open.  

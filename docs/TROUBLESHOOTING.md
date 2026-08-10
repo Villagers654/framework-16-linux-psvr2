@@ -36,10 +36,10 @@ emit `Init playstation_vr2_sense module...` and `TrackedDeviceAdded` lines.
 The blue space is Monado's fallback environment, not a tracking failure. It
 means the compositor is healthy but no application or WayVR dashboard is
 currently presenting. Current installs run games through `psvr2-fossvr-run`,
-which restarts only the WayVR overlay when the game exits and returns directly
-to its Games tab. Re-run `./install.sh --user --framework16-rx7700s` to update
-an older wrapper. To recover an already-stale session without losing room
-calibration, run:
+which keeps WayVR's OpenXR overlay session active alongside every game. When a
+game exits, the already-running dashboard returns directly to its Games tab.
+Re-run `./install.sh --user --framework16-rx7700s` to update an older wrapper.
+To recover an already-stale session without losing room calibration, run:
 
 ```bash
 systemctl --user restart psvr2-fossvr-wayvr.service

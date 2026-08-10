@@ -54,12 +54,10 @@ fi
 export vblank_mode=0
 export MESA_VK_WSI_PRESENT_MODE=immediate
 
-# A game may create a short-lived probe session before its real compositor
-# session. WayVR's overlay can keep that probe in READY indefinitely, so hand
-# the HMD off before starting the title. The independent transient game unit
-# survives this service stop and WayVR is restored after the title exits.
+# Keep WayVR's OpenXR overlay session alive while the primary application runs.
+# The dashboard, watch, notifications, and controller shortcuts are compositor
+# layers, so stopping WayVR here makes every one of them unavailable in-game.
 touch "$game_active_file"
-systemctl --user stop psvr2-fossvr-wayvr.service
 
 game_pid=""
 runtime_watcher=""
@@ -74,8 +72,9 @@ cleanup() {
     fi
     rm -f "$game_active_file"
     [[ -z "$game_registration" ]] || rm -f -- "$game_registration"
-    if systemctl --user is-active --quiet psvr2-fossvr.service; then
-        systemctl --user restart psvr2-fossvr-wayvr.service || true
+    if systemctl --user is-active --quiet psvr2-fossvr.service &&
+       ! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then
+        systemctl --user start psvr2-fossvr-wayvr.service || true
     fi
 }
 trap forward_signal HUP INT TERM

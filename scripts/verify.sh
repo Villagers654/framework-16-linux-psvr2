@@ -41,6 +41,7 @@ check grep -Fq 'XRIZER_FORCE_RAW_TRACKING_SPACE=1' "$HOME/.local/bin/psvr2-room-
 check grep -Fq 'PSVR2 play area saved' "$HOME/.local/bin/psvr2-room-setup"
 check grep -Fq 'psvr2-room-setup.service' "$repo/patches/wayvr-psvr2-dashboard.patch"
 check grep -Fq 'registered_nonsteam_vr_apps' "$repo/patches/wayvr-nonsteam-vr-library.patch"
+check grep -Fq 'FrontendTask::HideDashboard' "$repo/patches/wayvr-dismiss-dashboard-on-launch.patch"
 check bash -c 'bash "$1"' _ "$repo/scripts/verify-haptics.sh"
 monado_service="$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
 if ! getcap "$monado_service" | grep -Fq 'cap_sys_nice=eip'; then

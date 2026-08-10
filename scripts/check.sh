@@ -38,6 +38,8 @@ grep -Fq 'systemctl --user stop psvr2-chaperone.service' bin/psvr2-room-setup
 grep -Fq 'required after *every*' bin/psvr2-room-setup
 grep -Fq 'while kill -0 -- "-$game_pid"' bin/psvr2-fossvr-run
 grep -Fq 'game_registration="$game_registry_dir/$BASHPID"' bin/psvr2-fossvr-run
+! grep -Fq 'systemctl --user stop psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
+grep -Fq '! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
 grep -Fq 'game_stop_helper="$helper_dir/psvr2-stop-games"' bin/psvr2-fossvr-stop
 bash -n bin/psvr2-stop-games
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \

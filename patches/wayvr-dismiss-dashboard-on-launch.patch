@@ -1,0 +1,12 @@
+diff --git a/dash-frontend/src/views/game_launcher.rs b/dash-frontend/src/views/game_launcher.rs
+index 0448947..f20e377 100644
+--- a/dash-frontend/src/views/game_launcher.rs
++++ b/dash-frontend/src/views/game_launcher.rs
+@@ -187,6 +187,7 @@ impl View {
+ 						"GAME_LAUNCHED",
+ 					)));
+ 				self.frontend_tasks.push(FrontendTask::PlaySound(SoundType::Launch));
++				self.frontend_tasks.push(FrontendTask::HideDashboard);
+ 			}
+ 			Err(e) => {
+ 				self
