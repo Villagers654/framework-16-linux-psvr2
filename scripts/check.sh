@@ -47,6 +47,8 @@ grep -Fq 'systemctl --user start psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-st
 grep -Fq 'if is_monado_failed "$service_pid"; then' bin/psvr2-fossvr-start
 grep -Fq 'tracking_established=1' bin/psvr2-autostart-monitor
 grep -Fq 'tracking_established && ! tracking_suspended' bin/psvr2-autostart-monitor
+! grep -Fq '"$helper_dir/psvr2-stop-games"' bin/psvr2-autostart-monitor
+! grep -Fq 'systemctl --user stop psvr2-fossvr-wayvr.service psvr2-chaperone.service' bin/psvr2-autostart-monitor
 bash -n bin/psvr2-stop-games
 usb_reset_root="$work_dir/usb-reset"
 usb_reset_log="$work_dir/usb-reset.log"
@@ -104,6 +106,8 @@ if PSVR2_TRACKING_LOG_TEXT=$'TrackingStatus searching -> stable\nforce 3DoF OFF\
   echo 'Tracking-state guard accepted forced 3DoF' >&2
   exit 1
 fi
+PSVR2_TRACKING_LOG_TEXT=$'TrackingStatus unstable -> stable\nmap registration error 1 -> 0' \
+  bash -c 'source lib/psvr2-common.sh; psvr2_tracking_is_stable 1'
 calibration_root="$work_dir/calibration"
 steam_root="$work_dir/steam"
 empty_settings="$work_dir/empty-settings"

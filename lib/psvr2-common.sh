@@ -29,7 +29,6 @@ PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS="${PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS
 PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS="${PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS:-$PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS}"
 PSVR2_TRACKING_LOSS_CHECKS="${PSVR2_TRACKING_LOSS_CHECKS:-6}"
 PSVR2_TRACKING_RECOVERY_CHECKS="${PSVR2_TRACKING_RECOVERY_CHECKS:-3}"
-PSVR2_TRACKING_RESTART_SECONDS="${PSVR2_TRACKING_RESTART_SECONDS:-60}"
 PSVR2_DISCONNECT_CONTROLLERS="${PSVR2_DISCONNECT_CONTROLLERS:-0}"
 STEAM_ROOT="${STEAM_ROOT:-$HOME/.local/share/Steam}"
 ENVISION_PROFILE_ROOT="${ENVISION_PROFILE_ROOT:-$HOME/.local/share/envision/psvr2-toolkit-monado}"
@@ -63,8 +62,7 @@ for setting in PSVR2_RENDER_SCALE PSVR2_LINK_STABILITY_CHECKS \
     PSVR2_STARTUP_RETRY_BASE_SECONDS PSVR2_STARTUP_RETRY_MAX_SECONDS \
     PSVR2_STARTUP_RETRY_ATTEMPTS PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD \
     PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS \
-    PSVR2_TRACKING_LOSS_CHECKS PSVR2_TRACKING_RECOVERY_CHECKS \
-    PSVR2_TRACKING_RESTART_SECONDS; do
+    PSVR2_TRACKING_LOSS_CHECKS PSVR2_TRACKING_RECOVERY_CHECKS; do
     require_uint "$setting" "${!setting}" || { return 1 2>/dev/null || exit 1; }
 done
 for setting in PSVR2_SPECTATOR_ENABLE PSVR2_CHAPERONE_ENABLE PSVR2_DISCONNECT_CONTROLLERS; do
@@ -86,7 +84,7 @@ export PSVR2_LINK_STABILITY_CHECKS PSVR2_LINK_DISCONNECT_CHECKS
 export PSVR2_LINK_STABILITY_INTERVAL_SECONDS
 export PSVR2_STARTUP_RETRY_BASE_SECONDS PSVR2_STARTUP_RETRY_MAX_SECONDS PSVR2_STARTUP_RETRY_ATTEMPTS
 export PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS
-export PSVR2_TRACKING_LOSS_CHECKS PSVR2_TRACKING_RECOVERY_CHECKS PSVR2_TRACKING_RESTART_SECONDS
+export PSVR2_TRACKING_LOSS_CHECKS PSVR2_TRACKING_RECOVERY_CHECKS
 export PSVR2_DISCONNECT_CONTROLLERS
 export STEAM_ROOT ENVISION_PROFILE_ROOT
 export MONADO_PREFIX PSVR2_SETUP_ROOT AMD_VULKAN_DEVICE DGPU_PCI_ADDRESS
@@ -115,9 +113,13 @@ psvr2_tracking_is_stable() {
     last_playarea=$(grep '(playarea:' <<<"$logs" | "$select_latest" -n 1 || true)
 
     [[ "$last_status" == *'-> stable'* ]] || return 1
-    [[ "$last_3dof" == *'force 3DoF OFF'* ]] || return 1
+    # Some drivers chatter between stable/unstable rapidly enough to evict the
+    # older one-shot Map-latched and 3DoF-off records from journalctl's bounded
+    # result. Missing historical records are not evidence of a current loss;
+    # reject only a latest record that explicitly reports an unsafe state.
+    [[ -z "$last_3dof" || "$last_3dof" == *'force 3DoF OFF'* ]] || return 1
     [[ -z "$last_fake" || "$last_fake" == *'fake Position OFF'* ]] || return 1
-    [[ "$last_map" == *'Map latched'* ]] || return 1
-    [[ "$last_playarea" == *'(playarea: 1, map latch: 1)'* ]] || return 1
+    [[ -z "$last_map" || "$last_map" == *'Map latched'* ]] || return 1
+    [[ -z "$last_playarea" || "$last_playarea" == *'(playarea: 1, map latch: 1)'* ]] || return 1
     [[ -z "$last_registration" || "$last_registration" == *'-> 0'* ]] || return 1
 }

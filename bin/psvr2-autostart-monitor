@@ -21,7 +21,6 @@ runtime_retry_cooldown=${PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS:-$runtime_recovery
 usb_recovery_cooldown=${PSVR2_USB_RECOVERY_COOLDOWN_SECONDS:-8}
 tracking_loss_checks=${PSVR2_TRACKING_LOSS_CHECKS:-3}
 tracking_recovery_checks=${PSVR2_TRACKING_RECOVERY_CHECKS:-3}
-tracking_restart_seconds=${PSVR2_TRACKING_RESTART_SECONDS:-60}
 required_usb_interfaces=${PSVR2_USB_INTERFACE_MINIMUM:-11}
 suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 room_setup_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-room-setup-active"
@@ -39,7 +38,6 @@ runtime_failure_streak=0
 tracking_bad_checks=0
 tracking_good_checks=0
 tracking_suspended=0
-tracking_bad_since=0
 tracking_established=0
 
 load_runtime_failure_state() {
@@ -211,24 +209,28 @@ connected_controller_count() {
 }
 
 suspend_tracking_dependents() {
-    echo "PSVR2 lost its room-anchored 6DoF origin; pausing VR clients while it relocalizes" >&2
-    [[ ! -x "$helper_dir/psvr2-stop-games" ]] || "$helper_dir/psvr2-stop-games" || true
-    systemctl --user stop psvr2-fossvr-wayvr.service psvr2-chaperone.service 2>/dev/null || true
+    echo "PSVR2 room tracking is uncertain; hiding chaperone while it relocalizes" >&2
+    # Tracking corrections are recoverable and must never destroy application
+    # state. Keep games, WayVR, and Monado alive; only hide geometry whose room
+    # placement cannot currently be trusted.
+    systemctl --user stop psvr2-chaperone.service 2>/dev/null || true
     tracking_suspended=1
-    tracking_bad_since=$SECONDS
 }
 
 resume_tracking_dependents() {
-    echo "PSVR2 room-anchored 6DoF recovered; recreating dashboard and chaperone sessions"
-    # Recreate the OpenXR session so WayVR adopts the newly anchored STAGE
-    # space instead of retaining the provisional startup reference space.
-    systemctl --user restart psvr2-fossvr-wayvr.service || return 1
+    if (( ! tracking_established )); then
+        echo "PSVR2 room-anchored 6DoF acquired; recreating the dashboard against STAGE"
+        # Only the initial provisional session needs recreation. Never restart
+        # WayVR after a transient loss because it owns in-game overlays.
+        systemctl --user restart psvr2-fossvr-wayvr.service || return 1
+    else
+        echo "PSVR2 room-anchored 6DoF recovered; restoring chaperone"
+    fi
     if [[ "${PSVR2_CHAPERONE_ENABLE:-0}" == 1 ]] && [[ -x "${PSVR2_CHAPERONE_BINARY:-}" ]]; then
         systemctl --user restart psvr2-chaperone.service || true
     fi
     tracking_established=1
     tracking_suspended=0
-    tracking_bad_since=0
 }
 
 guard_tracking_origin() {
@@ -253,16 +255,6 @@ guard_tracking_origin() {
     if (( tracking_established && ! tracking_suspended )) \
         && (( tracking_bad_checks >= tracking_loss_checks )); then
         suspend_tracking_dependents
-    fi
-    if (( tracking_suspended )) && (( tracking_bad_since > 0 )) \
-        && (( SECONDS - tracking_bad_since >= tracking_restart_seconds )); then
-        echo "PSVR2 did not relocalize within ${tracking_restart_seconds}s; recycling the runtime" >&2
-        PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
-        tracking_established=0
-        tracking_suspended=0
-        tracking_bad_since=0
-        tracking_bad_checks=0
-        next_retry=$((SECONDS + startup_retry_base))
     fi
     return 1
 }
@@ -495,7 +487,6 @@ while true; do
             tracking_bad_checks=0
             tracking_good_checks=0
             tracking_suspended=0
-            tracking_bad_since=0
             tracking_established=0
         fi
         if is_runtime_active \
