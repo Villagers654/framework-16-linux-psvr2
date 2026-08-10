@@ -7,6 +7,11 @@ audio_helper="$helper_dir/psvr2-audio"
 controller_disconnect="$helper_dir/psvr2-controller-disconnect"
 game_stop_helper="$helper_dir/psvr2-stop-games"
 lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+runtime_artifacts=(
+    "$lock_dir/wayvr.pid"
+    "$lock_dir/wayvr.disp"
+    "$lock_dir/monado_comp_ipc"
+)
 
 # A disconnect must preempt Room Setup before waiting for the shared lifecycle
 # lock. Room Setup can hold that lock inside its nested runtime start while it
@@ -42,6 +47,17 @@ if [[ "$state" != inactive && "$state" != failed ]]; then
     systemctl --user kill --kill-whom=all --signal=SIGKILL psvr2-fossvr.service || true
 fi
 systemctl --user stop psvr2-fossvr.service || true
+# Release the Framework dGPU's forced VR profile on USB or DisplayPort
+# disconnect. The USB-add udev event re-enables it on the next connection.
+systemctl --no-block stop psvr2-dgpu-power.service 2>/dev/null || true
+# Service shutdown can leave dead IPC and PID/display markers behind. Remove
+# them only after every producer is stopped so the next connection cannot
+# mistake stale state for a live compositor or dashboard.
+for artifact in "${runtime_artifacts[@]}"; do
+    if [[ -e "$artifact" || -S "$artifact" ]]; then
+        unlink -- "$artifact" 2>/dev/null || true
+    fi
+done
 systemctl --user reset-failed \
     psvr2-room-setup.service \
     psvr2-fossvr.service \

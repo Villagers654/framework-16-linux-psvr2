@@ -123,6 +123,11 @@ for cycle in $(seq 1 "$cycles"); do
         exit 1
     fi
 
+    # The final cycle models Monado exiting before the physical disconnect is
+    # observed. Teardown must still run to release non-runtime session state.
+    if (( cycle == cycles )); then
+        printf 'inactive\n' > "$runtime_state"
+    fi
     printf 'disconnected\n' > "$connection_state"
     stop_target=$((cycle))
     if ! wait_for "$stop_log" "$stop_target" 18; then

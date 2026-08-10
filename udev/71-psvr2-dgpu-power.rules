@@ -1,3 +1,5 @@
 # AMD-only: start the dGPU latency/power guard while the PC adapter is present.
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="054c", ATTR{idProduct}=="0cde", TAG+="systemd", ENV{SYSTEMD_WANTS}+="psvr2-dgpu-power.service"
-ACTION=="remove", SUBSYSTEM=="usb", ENV{idVendor}=="054c", ENV{idProduct}=="0cde", RUN+="/usr/bin/systemctl --no-block stop psvr2-dgpu-power.service"
+# Device attributes are already gone during remove events; PRODUCT remains in
+# the uevent environment and reliably identifies the detached PSVR2 function.
+ACTION=="remove", SUBSYSTEM=="usb", ENV{PRODUCT}=="54c/cde/*", RUN+="/usr/bin/systemctl --no-block stop psvr2-dgpu-power.service"
