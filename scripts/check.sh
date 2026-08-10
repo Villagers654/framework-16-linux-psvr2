@@ -64,6 +64,7 @@ grep -Fxq '002/012' "$usb_reset_log"
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
   "$work_dir/chaperone.toml"
 test "$(grep -c '^\[\[boundary\]\]$' "$work_dir/chaperone.toml")" = 4
+grep -Fxq 'fade_start = 0.45' "$work_dir/chaperone.toml"
 python3 -c 'import sys,tomllib; tomllib.load(open(sys.argv[1], "rb"))' \
   "$work_dir/chaperone.toml"
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone-offset.vrchap \

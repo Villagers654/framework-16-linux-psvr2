@@ -73,7 +73,9 @@ if len(boundary) < 3:
 # rotate the warning polygon a second time.
 
 defaults = {
-    "fade_start": 0.75,
+    # Show the grid only when the headset or controllers are genuinely close
+    # to an edge. Existing user-tuned values remain authoritative below.
+    "fade_start": 0.45,
     "fade_end": 0.0,
     "wall_height": 2.5,
     "grid_spacing": 0.4,
