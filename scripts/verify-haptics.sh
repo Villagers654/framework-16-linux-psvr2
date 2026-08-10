@@ -22,6 +22,10 @@ check "PSVR2 Unity compatibility profile remains whitelisted in Monado haptic ha
     'grep -qF "playstation_vr2_sense_controller" "$0"' \
     "$repo/patches/monado-psvr2-sense.patch"
 
+check "Toolkit Sense controllers publish Touch action and pose bindings" bash -c \
+    'grep -qF "XRT_INPUT_TOUCH_GRIP_POSE" "$0" && grep -qF "XRT_INPUT_TOUCH_AIM_POSE" "$0" && grep -qF "touch_binding_profiles" "$0"' \
+    "$repo/patches/monado-steamvr-touch-bindings.patch"
+
 check "WayVR controller haptic output paths are in the patched dashboard actions" bash -c \
     'grep -qF "/user/hand/left/output/haptic" "$0" && grep -qF "/user/hand/right/output/haptic" "$0"' \
     "$repo/patches/wayvr-psvr2-dashboard.patch"

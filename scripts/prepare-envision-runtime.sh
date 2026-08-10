@@ -19,6 +19,7 @@ monado_patches=(
   "$repo/patches/monado-runtime-compat.patch"
   "$repo/patches/monado-steamvr-hmd-tracking.patch"
   "$repo/patches/monado-psvr2-sense.patch"
+  "$repo/patches/monado-steamvr-touch-bindings.patch"
   "$repo/patches/monado-steamvr-host-poses.patch"
   "$repo/patches/monado-openvr-controller-tracking.patch"
   "$repo/patches/monado-ipc-input-filter.patch"

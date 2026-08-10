@@ -1,0 +1,79 @@
+diff --git a/src/xrt/drivers/steamvr_lh/steamvr_lh.cpp b/src/xrt/drivers/steamvr_lh/steamvr_lh.cpp
+index c91a2fe00..0ddf01b23 100644
+--- a/src/xrt/drivers/steamvr_lh/steamvr_lh.cpp
++++ b/src/xrt/drivers/steamvr_lh/steamvr_lh.cpp
+@@ -95,6 +95,63 @@ DEBUG_GET_ONCE_NUM_OPTION(lh_discover_wait_ms, "LH_DISCOVER_WAIT_MS", 3000)
+ 
+ static constexpr size_t MAX_CONTROLLERS = 16;
+ 
++// The PS VR2 Toolkit driver is adapted to expose Sense controllers as
++// Oculus Touch devices. OpenXR still needs explicit profile mappings: a
++// matching xrt_device::name alone does not bind actions or pose spaces.
++static struct xrt_binding_input_pair simple_inputs_touch[] = {
++    {XRT_INPUT_SIMPLE_SELECT_CLICK, XRT_INPUT_TOUCH_TRIGGER_VALUE},
++    {XRT_INPUT_SIMPLE_MENU_CLICK, XRT_INPUT_TOUCH_MENU_CLICK},
++    {XRT_INPUT_SIMPLE_GRIP_POSE, XRT_INPUT_TOUCH_GRIP_POSE},
++    {XRT_INPUT_SIMPLE_AIM_POSE, XRT_INPUT_TOUCH_AIM_POSE},
++};
++
++static struct xrt_binding_output_pair simple_outputs_touch[] = {
++    {XRT_OUTPUT_NAME_SIMPLE_VIBRATION, XRT_OUTPUT_NAME_TOUCH_HAPTIC},
++};
++
++static struct xrt_binding_input_pair touch_inputs_touch[] = {
++    {XRT_INPUT_TOUCH_X_CLICK, XRT_INPUT_TOUCH_X_CLICK},
++    {XRT_INPUT_TOUCH_X_TOUCH, XRT_INPUT_TOUCH_X_TOUCH},
++    {XRT_INPUT_TOUCH_Y_CLICK, XRT_INPUT_TOUCH_Y_CLICK},
++    {XRT_INPUT_TOUCH_Y_TOUCH, XRT_INPUT_TOUCH_Y_TOUCH},
++    {XRT_INPUT_TOUCH_MENU_CLICK, XRT_INPUT_TOUCH_MENU_CLICK},
++    {XRT_INPUT_TOUCH_A_CLICK, XRT_INPUT_TOUCH_A_CLICK},
++    {XRT_INPUT_TOUCH_A_TOUCH, XRT_INPUT_TOUCH_A_TOUCH},
++    {XRT_INPUT_TOUCH_B_CLICK, XRT_INPUT_TOUCH_B_CLICK},
++    {XRT_INPUT_TOUCH_B_TOUCH, XRT_INPUT_TOUCH_B_TOUCH},
++    {XRT_INPUT_TOUCH_SYSTEM_CLICK, XRT_INPUT_TOUCH_SYSTEM_CLICK},
++    {XRT_INPUT_TOUCH_SQUEEZE_VALUE, XRT_INPUT_TOUCH_SQUEEZE_VALUE},
++    {XRT_INPUT_TOUCH_TRIGGER_TOUCH, XRT_INPUT_TOUCH_TRIGGER_TOUCH},
++    {XRT_INPUT_TOUCH_TRIGGER_VALUE, XRT_INPUT_TOUCH_TRIGGER_VALUE},
++    {XRT_INPUT_TOUCH_THUMBSTICK_CLICK, XRT_INPUT_TOUCH_THUMBSTICK_CLICK},
++    {XRT_INPUT_TOUCH_THUMBSTICK_TOUCH, XRT_INPUT_TOUCH_THUMBSTICK_TOUCH},
++    {XRT_INPUT_TOUCH_THUMBSTICK, XRT_INPUT_TOUCH_THUMBSTICK},
++    {XRT_INPUT_TOUCH_GRIP_POSE, XRT_INPUT_TOUCH_GRIP_POSE},
++    {XRT_INPUT_TOUCH_AIM_POSE, XRT_INPUT_TOUCH_AIM_POSE},
++    {XRT_INPUT_TOUCH_TRIGGER_PROXIMITY, XRT_INPUT_TOUCH_TRIGGER_PROXIMITY},
++};
++
++static struct xrt_binding_output_pair touch_outputs_touch[] = {
++    {XRT_OUTPUT_NAME_TOUCH_HAPTIC, XRT_OUTPUT_NAME_TOUCH_HAPTIC},
++};
++
++static struct xrt_binding_profile touch_binding_profiles[] = {
++    {
++        .name = XRT_DEVICE_TOUCH_CONTROLLER,
++        .inputs = touch_inputs_touch,
++        .input_count = ARRAY_SIZE(touch_inputs_touch),
++        .outputs = touch_outputs_touch,
++        .output_count = ARRAY_SIZE(touch_outputs_touch),
++    },
++    {
++        .name = XRT_DEVICE_SIMPLE_CONTROLLER,
++        .inputs = simple_inputs_touch,
++        .input_count = ARRAY_SIZE(simple_inputs_touch),
++        .outputs = simple_outputs_touch,
++        .output_count = ARRAY_SIZE(simple_outputs_touch),
++    },
++};
++
+ 
+ struct steamvr_lh_system
+ {
+@@ -373,6 +430,10 @@ Context::setup_controller(const char *serial, vr::ITrackedDeviceServerDriver *dr
+ 		controller[device_idx]->binding_profiles = vive_binding_profiles_flipvr;
+ 		controller[device_idx]->binding_profile_count = vive_binding_profiles_flipvr_count;
+ 		break;
++	case XRT_DEVICE_TOUCH_CONTROLLER:
++		controller[device_idx]->binding_profiles = touch_binding_profiles;
++		controller[device_idx]->binding_profile_count = ARRAY_SIZE(touch_binding_profiles);
++		break;
+ 	default: break;
+ 	}
+ 
