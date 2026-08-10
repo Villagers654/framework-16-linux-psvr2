@@ -42,6 +42,10 @@ grep -Fq 'game_registration="$game_registry_dir/$BASHPID"' bin/psvr2-fossvr-run
 grep -Fq '! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
 grep -Fq 'game_stop_helper="$helper_dir/psvr2-stop-games"' bin/psvr2-fossvr-stop
 grep -Fq '"$usb_reset_helper"' bin/psvr2-autostart-monitor
+! grep -Fq 'wait_for_psvr2_tracking' bin/psvr2-fossvr-start
+grep -Fq 'systemctl --user start psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-start
+grep -Fq 'tracking_established=1' bin/psvr2-autostart-monitor
+grep -Fq 'tracking_established && ! tracking_suspended' bin/psvr2-autostart-monitor
 bash -n bin/psvr2-stop-games
 usb_reset_root="$work_dir/usb-reset"
 usb_reset_log="$work_dir/usb-reset.log"

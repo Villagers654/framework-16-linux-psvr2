@@ -40,6 +40,7 @@ tracking_bad_checks=0
 tracking_good_checks=0
 tracking_suspended=0
 tracking_bad_since=0
+tracking_established=0
 
 load_runtime_failure_state() {
     if [[ -r "$runtime_failure_state_file" ]]; then
@@ -219,10 +220,13 @@ suspend_tracking_dependents() {
 
 resume_tracking_dependents() {
     echo "PSVR2 room-anchored 6DoF recovered; recreating dashboard and chaperone sessions"
-    systemctl --user start psvr2-fossvr-wayvr.service || return 1
+    # Recreate the OpenXR session so WayVR adopts the newly anchored STAGE
+    # space instead of retaining the provisional startup reference space.
+    systemctl --user restart psvr2-fossvr-wayvr.service || return 1
     if [[ "${PSVR2_CHAPERONE_ENABLE:-0}" == 1 ]] && [[ -x "${PSVR2_CHAPERONE_BINARY:-}" ]]; then
         systemctl --user restart psvr2-chaperone.service || true
     fi
+    tracking_established=1
     tracking_suspended=0
     tracking_bad_since=0
 }
@@ -233,7 +237,8 @@ guard_tracking_origin() {
     if psvr2_tracking_is_stable "$pid"; then
         tracking_bad_checks=0
         tracking_good_checks=$((tracking_good_checks + 1))
-        if (( tracking_suspended )) && (( tracking_good_checks >= tracking_recovery_checks )); then
+        if (( tracking_good_checks >= tracking_recovery_checks )) \
+            && (( ! tracking_established || tracking_suspended )); then
             resume_tracking_dependents || true
         fi
         return 0
@@ -241,13 +246,19 @@ guard_tracking_origin() {
 
     tracking_good_checks=0
     tracking_bad_checks=$((tracking_bad_checks + 1))
-    if (( ! tracking_suspended )) && (( tracking_bad_checks >= tracking_loss_checks )); then
+    # Initial relocalization is not a tracking-loss event. Keep the dashboard
+    # visible and leave only room-space clients disabled until the saved map
+    # latches. Once tracking has been established, retain the stricter loss
+    # handling so a stale/head-relative boundary can never be shown.
+    if (( tracking_established && ! tracking_suspended )) \
+        && (( tracking_bad_checks >= tracking_loss_checks )); then
         suspend_tracking_dependents
     fi
     if (( tracking_suspended )) && (( tracking_bad_since > 0 )) \
         && (( SECONDS - tracking_bad_since >= tracking_restart_seconds )); then
         echo "PSVR2 did not relocalize within ${tracking_restart_seconds}s; recycling the runtime" >&2
         PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
+        tracking_established=0
         tracking_suspended=0
         tracking_bad_since=0
         tracking_bad_checks=0
@@ -367,6 +378,8 @@ start_runtime() {
             next_retry=0
             clear_runtime_cooldown
             clear_runtime_failure_state
+            tracking_established=0
+            tracking_suspended=0
             return 0
         fi
 
@@ -456,6 +469,8 @@ while true; do
                 rm -f "$suppress_file"
                 clear_runtime_state
                 next_retry=0
+                tracking_established=0
+                tracking_suspended=0
                 previous=$current
                 previous_controllers=$(connected_controller_count)
             fi
@@ -481,6 +496,7 @@ while true; do
             tracking_good_checks=0
             tracking_suspended=0
             tracking_bad_since=0
+            tracking_established=0
         fi
         if is_runtime_active \
             && (( ! tracking_suspended )) \

@@ -51,17 +51,7 @@ flock 8
 systemctl --user start psvr2-autostart-monitor.service || true
 
 socket="$lock_dir/monado_comp_ipc"
-
-wait_for_psvr2_tracking() {
-    local pid=$1
-    for _ in $(seq 1 180); do
-        psvr2_tracking_is_stable "$pid" && return 0
-        systemctl --user is-active --quiet psvr2-fossvr.service || return 1
-        sleep 1
-    done
-    echo 'PSVR2 positional tracking did not stabilize. Look around the room, then start VR again.' >&2
-    return 1
-}
+tracking_ready=0
 
 start_optional_services() {
     local pid
@@ -69,10 +59,17 @@ start_optional_services() {
     if [[ "${PSVR2_RUNTIME_ONLY:-0}" == 1 ]]; then
         return 0
     fi
-    pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value)
-    wait_for_psvr2_tracking "$pid" || return 1
+    # The dashboard does not need a room-space origin. Bring it up as soon as
+    # the HMD exists so a slow saved-map relocalization cannot make startup
+    # look dead. The monitor enables room-space clients once tracking is real.
     systemctl --user start psvr2-fossvr-wayvr.service
-    if [[ "${PSVR2_CHAPERONE_ENABLE:-0}" == 1 ]]; then
+    pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value)
+    if psvr2_tracking_is_stable "$pid"; then
+        tracking_ready=1
+    else
+        echo 'PSVR2 dashboard is ready; room tracking is still relocalizing.' >&2
+    fi
+    if (( tracking_ready )) && [[ "${PSVR2_CHAPERONE_ENABLE:-0}" == 1 ]]; then
         if [[ -x "${PSVR2_CHAPERONE_BINARY}" ]]; then
             systemctl --user start psvr2-chaperone.service || true
         else
@@ -85,7 +82,11 @@ if systemctl --user is-active --quiet psvr2-fossvr.service \
     && [[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket"; then
     start_optional_services
     "$audio_helper" vr || true
-    echo "PSVR2 already ready: ${PSVR2_RENDER_SCALE}% render scale + WayVR."
+    if (( tracking_ready )); then
+        echo "PSVR2 already ready: ${PSVR2_RENDER_SCALE}% render scale + WayVR."
+    else
+        echo "PSVR2 dashboard ready: ${PSVR2_RENDER_SCALE}% render scale; room tracking is still relocalizing."
+    fi
     exit 0
 fi
 
@@ -192,4 +193,8 @@ systemctl --user is-active --quiet psvr2-fossvr-wayvr.service || {
     journalctl --user -u psvr2-fossvr-wayvr.service -n 60 --no-pager >&2; exit 1;
 }
 "$audio_helper" vr || true
-echo "PSVR2 ready: ${PSVR2_RENDER_SCALE}% render scale + WayVR."
+if (( tracking_ready )); then
+    echo "PSVR2 ready: ${PSVR2_RENDER_SCALE}% render scale + WayVR."
+else
+    echo "PSVR2 dashboard ready: ${PSVR2_RENDER_SCALE}% render scale; room tracking is still relocalizing."
+fi
