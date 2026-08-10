@@ -67,7 +67,7 @@ before running the quick start.
 | Script utilities | Bash, Git, cURL, UnZip, `jq`, Python 3, `usbutils`, `pciutils`, and `iproute` | These supply `git`, `curl`, `unzip`, `jq`, `python3`, `lsusb`, `lspci`, and `ss`. Internet access to GitHub, GitLab, Steam, and Homebrew is required during setup. |
 | WayVR build | Rust/Cargo, CMake, Ninja, Meson, pkg-config, shaderc, ALSA, PipeWire, xkbcommon, D-Bus, and OpenSSL development files | The tested Bazzite setup supplies this self-contained toolchain through Homebrew; equivalent distribution development packages also work. |
 | xr-chaperone | Rust/Cargo plus the WayVR build toolchain | Built from a pinned source commit; no mutable nightly binary is executed. |
-| Screenshot shortcut | `wmctrl`, ImageMagick, and `notify-send` | Optional. Only required for the PS-button + trigger screenshot chord. |
+| Screenshot shortcut | `wmctrl`, ImageMagick, `flock`, and `notify-send` | Optional. Only required for the PS-button + trigger screenshot chord. |
 
 The headset and Sony PC adapter must have PC-compatible firmware. If the
 PlayStation VR2 App cannot perform a required firmware update under Proton,
@@ -158,23 +158,30 @@ required.
 ## Everyday use
 
 - Power on/connect PSVR2: the runtime and game launcher start automatically.
-- A fullscreen, GPU-native left-eye spectator view opens on the laptop display
+- A fullscreen, undistorted full-left-eye spectator view opens on the laptop display
   by default and closes with the runtime. Set `PSVR2_SPECTATOR_ENABLE=0` in
   `settings.env` for headset-only output.
 - Turn controllers on before or after headset launch: WayVR starts without
   blocking. Controllers can appear live over Bluetooth + HID; no Monado restart
   is required just to expose roles.
+- Startup waits for the saved room map and stable positional tracking before
+  opening WayVR or Chaperone, so a fake-position 3DoF fallback is never reported
+  as ready. It continuously guards that origin after startup and recreates
+  clients after relocalization instead of leaving them attached to stale STAGE
+  coordinates.
 - Run **PSVR2 Room Setup** once; its polygon automatically supplies
   xr-chaperone's warning walls and fade geometry.
 - Warning geometry is visual-only and does not hard-block movement.
 - Set `PSVR2_CHAPERONE_ENABLE=0` in `settings.env` to disable the overlay.
 - Press either PS button: show or hide the WayVR dashboard.
-- Press either PS button, then pull either trigger within half a second: save the VR mirror to
+- Press either PS button and pull either trigger within three quarters of a second, in either order: save the VR mirror to
   `~/Pictures/VR Screenshots/`.
 - Select **Games**: only detected Steam VR titles are listed.
 - Select **PSVR2 Room Setup**: run full room-scale calibration from the headset.
   This atomically validates the boundary, boundary metadata, and spatial map;
-  an interrupted or incomplete save restores the previous complete set.
+  an interrupted or incomplete save restores the previous complete set. The
+  successful set becomes the authoritative calibration restored on every
+  future runtime start.
 - Select **Applications**: launch desktop applications or view the GNOME desktop.
 - Exit a game or Room Setup: the wrapper restores WayVR directly to the Games
   dashboard while keeping Monado and the calibrated tracking origin alive.

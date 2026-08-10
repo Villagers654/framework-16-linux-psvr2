@@ -174,16 +174,25 @@ running and `psvr2-chaperone` is enabled in `settings.env`.
 If the walls appear to follow the headset or a physically in-bounds headset is
 reported outside, inspect the Monado log first. `force 3DoF ON` or
 `fake Position ON` means positional tracking failed upstream; restarting the
-overlay cannot fix it. Re-run PSVR2 Room Setup so its boundary, metadata, and
-spatial map are committed together. The launcher backs up the previous set and
-refuses partial saves. If tracking is healthy but the polygon alone is
-misplaced, re-run `./install.sh --user` and restart
-`psvr2-chaperone.service`.
+overlay cannot fix it. Startup now withholds WayVR and Chaperone until the map
+is latched, tracking is stable, map registration is healthy, and forced 3DoF is
+off. It additionally requires Sony's play-area and map-latch state to both be
+valid. The connection monitor keeps checking that state after startup. If it is
+lost, active VR games are stopped and WayVR/Chaperone are paused; after stable
+relocalization their OpenXR sessions are recreated against the recovered
+origin. A prolonged loss triggers a bounded runtime recycle.
+
+A completed Room Setup save becomes the authoritative boundary, universe
+metadata, and spatial-map snapshot. Normal startup restores that exact set
+before the driver loads, preventing later map optimization/writeback from
+accumulating origin drift across restarts. Room Setup uses runtime-only mode so
+it can create this set even on a factory-fresh installation.
 
 ## Spectator view is missing
 
-The fullscreen left-eye mirror is enabled by default and is rendered from
-Monado's existing compositor image without desktop capture. Confirm
+The fullscreen left-eye mirror is enabled by default and uses Monado's
+synchronized, pre-distortion compositor readback without desktop capture. It
+shows one complete eye with all active application and overlay layers. Confirm
 `PSVR2_SPECTATOR_ENABLE=1` in `~/.config/psvr2-linux/settings.env`, rebuild the
 pinned runtime with `./scripts/prepare-envision-runtime.sh` followed by
 `./scripts/build-envision-runtime.sh`, and restart the VR stack. The mirror is
@@ -257,14 +266,15 @@ timing matter. Leave the global default at 170% and change individual games.
 
 ## Screenshot chord does nothing
 
-Press either PS button, then pull either trigger within half a second. The helper
-targets an XWayland VR mirror, validates the resulting PNG, and refuses to fall
+Press either PS button and pull either trigger within three quarters of a second,
+in either order. The native Sense-controller listener works independently of
+OpenXR focus, so it remains active while WayVR is hidden during a game. The helper
+targets Monado's spectator view, validates the resulting PNG, and refuses to fall
 back to an unrelated desktop window. Check `wmctrl -lGpx`, run
 `psvr2-screenshot --print-window` to inspect the selected mirror, and run
 `psvr2-screenshot` directly to test capture. Successful captures are logged in
 the user journal under the `psvr2-screenshot` tag and saved under
-`~/Pictures/VR Screenshots/`. Native Wayland games without a mirror need their
-own screenshot feature.
+`~/Pictures/VR Screenshots/`.
 
 ## Controller haptics not firing in game
 

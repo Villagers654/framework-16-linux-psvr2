@@ -73,6 +73,29 @@ PY
 for patch in patches/*.patch; do
   git apply --stat "$patch" >/dev/null
 done
+cc -std=c11 -Wall -Wextra -Werror -fsyntax-only src/psvr2-screenshot-listener.c
+PSVR2_TRACKING_LOG_TEXT=$'TrackingStatus searching -> stable\nforce 3DoF OFF\nfake Position OFF\nMap latched\n(playarea: 1, map latch: 1)\nmap registration error 1 -> 0' \
+  bash -c 'source lib/psvr2-common.sh; psvr2_tracking_is_stable 1'
+if PSVR2_TRACKING_LOG_TEXT=$'TrackingStatus searching -> stable\nforce 3DoF OFF\nfake Position OFF\nMap latched\n(playarea: 1, map latch: 1)\nforce 3DoF ON' \
+  bash -c 'source lib/psvr2-common.sh; psvr2_tracking_is_stable 1'; then
+  echo 'Tracking-state guard accepted forced 3DoF' >&2
+  exit 1
+fi
+calibration_root="$work_dir/calibration"
+steam_root="$work_dir/steam"
+empty_settings="$work_dir/empty-settings"
+install -m 0600 /dev/null "$empty_settings"
+install -d "$calibration_root/room-calibration-current"
+install -m 0600 tests/fixtures/psvr2-chaperone.vrchap \
+  "$calibration_root/room-calibration-current/chaperone_info.vrchap"
+install -m 0600 /dev/null "$calibration_root/room-calibration-current/sceBoundaryMeta.bin"
+install -m 0600 /dev/null "$calibration_root/room-calibration-current/sceMapDb.bin"
+printf 'metadata\n' > "$calibration_root/room-calibration-current/sceBoundaryMeta.bin"
+printf 'map\n' > "$calibration_root/room-calibration-current/sceMapDb.bin"
+PSVR2_CONFIG="$empty_settings" PSVR2_SETUP_ROOT="$calibration_root" STEAM_ROOT="$steam_root" \
+  bin/psvr2-restore-calibration
+cmp "$calibration_root/room-calibration-current/chaperone_info.vrchap" \
+  "$steam_root/config/playstation_vr2/chaperone_info.vrchap"
 
 if command -v systemd-analyze >/dev/null 2>&1; then
   systemd-analyze verify systemd/user/*

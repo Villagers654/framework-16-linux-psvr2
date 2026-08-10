@@ -88,8 +88,11 @@ driver state files—`chaperone_info.vrchap`, `sceBoundaryMeta.bin`, and
 `sceMapDb.bin`—to change and remain stable for ten seconds before closing Room
 Setup and reloading Monado. The set is backed up before calibration; an
 interrupted or partial transaction is rejected and the previous complete set
-is restored. The reload is required because the PSVR2 driver and xrizer both
-capture the standing/raw transform at process startup.
+is restored. A successful set is also stored as the authoritative calibration
+and restored before every later runtime start, so driver map optimization cannot
+accumulate a different standing origin across restarts. The reload is required
+because the PSVR2 driver and xrizer both capture the standing/raw transform at
+process startup.
 
 ## 5. Oculus-style visual boundary overlay
 
@@ -164,10 +167,9 @@ Proton/Wine children if the headset disconnects—even when Revive reparents an
 injected process outside the launcher's process group.
 
 - PS button: toggle the WayVR dashboard.
-- Press either PS button, then pull either trigger within half a second: save the current XWayland VR mirror to
+- Press either PS button and pull either trigger within three quarters of a second, in either order: save the current VR spectator view to
   `~/Pictures/VR Screenshots/`.
 - Manual start/stop: `psvr2-fossvr-start` / `psvr2-fossvr-stop`.
 
-Most Proton VR games expose an XWayland mirror and support the screenshot
-shortcut. A native Wayland game with no XWayland mirror must use its own
-screenshot function.
+The shortcut captures Monado's canonical undistorted left-eye spectator view,
+so it works independently of whether a game creates an XWayland desktop window.

@@ -41,6 +41,7 @@ user_units=(
     psvr2-fossvr-wayvr.service
     psvr2-fossvr.service
     psvr2-room-setup.service
+    psvr2-screenshot-listener.service
     psvr2-steam-vr-sync.path
     psvr2-steam-vr-sync.service
     psvr2-steam-vr-sync.timer
@@ -94,6 +95,7 @@ uninstall_user() {
         rm -f -- "$HOME/.local/share/applications/$file"
     done
     rm -f -- "$HOME/.local/lib/psvr2-linux/common.sh" \
+        "$HOME/.local/lib/psvr2-linux/psvr2-screenshot-listener" \
         "$HOME/.config/environment.d/60-psvr2-openxr.conf" \
         "$HOME/.config/wireplumber/wireplumber.conf.d/51-psvr2-displayport-audio.conf"
     rm -f -- "$HOME/.config/systemd/user/psvr2-fossvr.service.d/50-spectator.conf"
@@ -145,6 +147,10 @@ fi
 
 if [[ "$mode" == user ]]; then
     [[ ${EUID} -ne 0 ]] || { echo "Run --user as your normal account." >&2; exit 1; }
+    command -v cc >/dev/null 2>&1 || {
+        echo "A C compiler is required to build the PSVR2 screenshot listener." >&2
+        exit 1
+    }
     install -d -m 0755 "$HOME/.local/bin" "$HOME/.local/lib/psvr2-linux" \
         "$HOME/.config/psvr2-linux" "$HOME/.config/systemd/user" \
         "$HOME/.config/environment.d" \
@@ -154,6 +160,13 @@ if [[ "$mode" == user ]]; then
         install -m 0755 "$script" "$HOME/.local/bin/"
     done < <(find "$repo_dir/bin" -maxdepth 1 -type f -print0)
     install -m 0644 "$repo_dir/lib/psvr2-common.sh" "$HOME/.local/lib/psvr2-linux/common.sh"
+    listener_build=$(mktemp)
+    trap 'rm -f -- "$listener_build"' EXIT
+    cc -std=c11 -O2 -Wall -Wextra -Werror \
+        "$repo_dir/src/psvr2-screenshot-listener.c" -o "$listener_build"
+    install -m 0755 "$listener_build" "$HOME/.local/lib/psvr2-linux/psvr2-screenshot-listener"
+    rm -f -- "$listener_build"
+    trap - EXIT
     rm -f -- "${legacy_units[@]/#/$HOME/.config/systemd/user/}"
     rm -f -- "${legacy_helpers[@]/#/$HOME/.local/bin/}"
     rm -f -- "${legacy_desktops[@]/#/$HOME/.local/share/applications/}"

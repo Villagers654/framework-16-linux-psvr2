@@ -51,7 +51,26 @@ flock 8
 systemctl --user start psvr2-autostart-monitor.service || true
 
 socket="$lock_dir/monado_comp_ipc"
+
+wait_for_psvr2_tracking() {
+    local pid=$1
+    for _ in $(seq 1 180); do
+        psvr2_tracking_is_stable "$pid" && return 0
+        systemctl --user is-active --quiet psvr2-fossvr.service || return 1
+        sleep 1
+    done
+    echo 'PSVR2 positional tracking did not stabilize. Look around the room, then start VR again.' >&2
+    return 1
+}
+
 start_optional_services() {
+    local pid
+    systemctl --user start psvr2-screenshot-listener.service
+    if [[ "${PSVR2_RUNTIME_ONLY:-0}" == 1 ]]; then
+        return 0
+    fi
+    pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value)
+    wait_for_psvr2_tracking "$pid" || return 1
     systemctl --user start psvr2-fossvr-wayvr.service
     if [[ "${PSVR2_CHAPERONE_ENABLE:-0}" == 1 ]]; then
         if [[ -x "${PSVR2_CHAPERONE_BINARY}" ]]; then
@@ -77,6 +96,7 @@ fi
 "$helper_dir/psvr2-sync-steam-vr-games" --discovery-only || true
 assert_monado_profile_supports_psvr2
 assert_monado_binary_has_psvr2_builder
+"$helper_dir/psvr2-restore-calibration"
 
 rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 

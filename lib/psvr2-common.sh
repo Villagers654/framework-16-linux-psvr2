@@ -27,6 +27,9 @@ PSVR2_STARTUP_RETRY_ATTEMPTS="${PSVR2_STARTUP_RETRY_ATTEMPTS:-3}"
 PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD="${PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD:-2}"
 PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS="${PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS:-90}"
 PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS="${PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS:-$PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS}"
+PSVR2_TRACKING_LOSS_CHECKS="${PSVR2_TRACKING_LOSS_CHECKS:-3}"
+PSVR2_TRACKING_RECOVERY_CHECKS="${PSVR2_TRACKING_RECOVERY_CHECKS:-3}"
+PSVR2_TRACKING_RESTART_SECONDS="${PSVR2_TRACKING_RESTART_SECONDS:-60}"
 PSVR2_DISCONNECT_CONTROLLERS="${PSVR2_DISCONNECT_CONTROLLERS:-0}"
 STEAM_ROOT="${STEAM_ROOT:-$HOME/.local/share/Steam}"
 ENVISION_PROFILE_ROOT="${ENVISION_PROFILE_ROOT:-$HOME/.local/share/envision/psvr2-toolkit-monado}"
@@ -59,7 +62,9 @@ for setting in PSVR2_RENDER_SCALE PSVR2_LINK_STABILITY_CHECKS \
     PSVR2_LINK_DISCONNECT_CHECKS PSVR2_LINK_STABILITY_INTERVAL_SECONDS \
     PSVR2_STARTUP_RETRY_BASE_SECONDS PSVR2_STARTUP_RETRY_MAX_SECONDS \
     PSVR2_STARTUP_RETRY_ATTEMPTS PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD \
-    PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS; do
+    PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS \
+    PSVR2_TRACKING_LOSS_CHECKS PSVR2_TRACKING_RECOVERY_CHECKS \
+    PSVR2_TRACKING_RESTART_SECONDS; do
     require_uint "$setting" "${!setting}" || { return 1 2>/dev/null || exit 1; }
 done
 for setting in PSVR2_SPECTATOR_ENABLE PSVR2_CHAPERONE_ENABLE PSVR2_DISCONNECT_CONTROLLERS; do
@@ -81,6 +86,38 @@ export PSVR2_LINK_STABILITY_CHECKS PSVR2_LINK_DISCONNECT_CHECKS
 export PSVR2_LINK_STABILITY_INTERVAL_SECONDS
 export PSVR2_STARTUP_RETRY_BASE_SECONDS PSVR2_STARTUP_RETRY_MAX_SECONDS PSVR2_STARTUP_RETRY_ATTEMPTS
 export PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS
+export PSVR2_TRACKING_LOSS_CHECKS PSVR2_TRACKING_RECOVERY_CHECKS PSVR2_TRACKING_RESTART_SECONDS
 export PSVR2_DISCONNECT_CONTROLLERS
 export STEAM_ROOT ENVISION_PROFILE_ROOT
 export MONADO_PREFIX PSVR2_SETUP_ROOT AMD_VULKAN_DEVICE DGPU_PCI_ADDRESS
+
+# Sony's bridge can publish orientation and position while its saved play area
+# is not actually registered. Only this complete state is safe for STAGE-space
+# clients such as games and xr-chaperone. Keep the journal query narrow because
+# Monado's renderer log is high-volume.
+psvr2_tracking_is_stable() {
+    local pid=${1:-} logs last_status last_3dof last_fake last_map last_registration last_playarea
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+    local select_latest='head'
+    if [[ -n "${PSVR2_TRACKING_LOG_TEXT:-}" ]]; then
+        logs=$PSVR2_TRACKING_LOG_TEXT
+        select_latest='tail'
+    else
+        logs=$(journalctl --user -u psvr2-fossvr.service "_PID=$pid" \
+            --grep='TrackingStatus|force 3DoF|fake Position|Map (latched|unlatched)|map registration error|\(playarea:' \
+            -n 48 -o cat --no-pager 2>/dev/null || true)
+    fi
+    last_status=$(grep 'TrackingStatus' <<<"$logs" | "$select_latest" -n 1 || true)
+    last_3dof=$(grep 'force 3DoF' <<<"$logs" | "$select_latest" -n 1 || true)
+    last_fake=$(grep 'fake Position' <<<"$logs" | "$select_latest" -n 1 || true)
+    last_map=$(grep -E 'Map (latched|unlatched)' <<<"$logs" | "$select_latest" -n 1 || true)
+    last_registration=$(grep 'map registration error' <<<"$logs" | "$select_latest" -n 1 || true)
+    last_playarea=$(grep '(playarea:' <<<"$logs" | "$select_latest" -n 1 || true)
+
+    [[ "$last_status" == *'-> stable'* ]] || return 1
+    [[ "$last_3dof" == *'force 3DoF OFF'* ]] || return 1
+    [[ -z "$last_fake" || "$last_fake" == *'fake Position OFF'* ]] || return 1
+    [[ "$last_map" == *'Map latched'* ]] || return 1
+    [[ "$last_playarea" == *'(playarea: 1, map latch: 1)'* ]] || return 1
+    [[ -z "$last_registration" || "$last_registration" == *'-> 0'* ]] || return 1
+}

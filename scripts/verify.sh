@@ -13,10 +13,12 @@ check grep -Fq 'PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1' \
   "$HOME/.config/environment.d/60-psvr2-openxr.conf"
 check test -x "$HOME/.local/bin/psvr2-controller-disconnect"
 check test -x "$HOME/.local/bin/psvr2-screenshot"
+check test -x "$HOME/.local/lib/psvr2-linux/psvr2-screenshot-listener"
+check systemctl --user is-active --quiet psvr2-screenshot-listener.service
 check test -x "$HOME/.local/bin/psvr2-chaperone"
 check test -x "$HOME/.local/bin/psvr2-import-boundary"
 check bash -c 'test "$(PSVR2_SCREENSHOT_WINDOW_LIST="$1" "$HOME/.local/bin/psvr2-screenshot" --print-window)" = 0x1' _ \
-    '0x1 0 1 0 0 3840 2400 game.Game host VR Game'
+    '0x1 0 1 0 0 3840 2400 monado-service.monado-service host PSVR2 Spectator View'
 if [[ "$PSVR2_CHAPERONE_ENABLE" == 1 ]]; then
   check test -x "${PSVR2_CHAPERONE_BINARY:-$HOME/.local/share/psvr2-setup/xr-chaperone/xr-chaperone}"
 fi

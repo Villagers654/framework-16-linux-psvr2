@@ -1,0 +1,11 @@
+[Unit]
+Description=PSVR2 Sense controller screenshot shortcut
+After=psvr2-fossvr.service
+PartOf=psvr2-fossvr.service
+BindsTo=psvr2-fossvr.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/lib/psvr2-linux/psvr2-screenshot-listener
+Restart=on-failure
+RestartSec=2

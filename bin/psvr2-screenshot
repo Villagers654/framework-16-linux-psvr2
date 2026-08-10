@@ -4,6 +4,7 @@ set -euo pipefail
 command -v wmctrl >/dev/null || { echo "wmctrl is required" >&2; exit 1; }
 command -v import >/dev/null || { echo "ImageMagick 'import' is required" >&2; exit 1; }
 command -v identify >/dev/null || { echo "ImageMagick 'identify' is required" >&2; exit 1; }
+command -v flock >/dev/null || { echo "flock is required" >&2; exit 1; }
 
 fail() {
     logger -t psvr2-screenshot "failed: $*"
@@ -14,12 +15,18 @@ fail() {
 
 output_dir="${XDG_PICTURES_DIR:-$HOME/Pictures}/VR Screenshots"
 mkdir -p "$output_dir"
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
+lock_file="$runtime_dir/psvr2-screenshot.lock"
+exec 9>"$lock_file"
+# WayVR may still see the chord while the always-running chaperone listener is
+# active. Only one helper may capture a given press.
+flock -n 9 || exit 0
 timestamp=$(date +%Y-%m-%d_%H-%M-%S-%N)
 output="$output_dir/PSVR2-$timestamp.png"
 
-# Prefer the PSVR2 utility; otherwise choose the largest visible XWayland
-# application window that is not Steam, WayVR, or the desktop shell. Proton
-# VR games are XWayland applications in the tested Bazzite configuration.
+# Capture only the canonical PSVR2 output: Room Setup while it is active, or
+# Monado's spectator view for every other VR application. Never silently take
+# a screenshot of an unrelated desktop or game companion window.
 window_list=${PSVR2_SCREENSHOT_WINDOW_LIST:-}
 if [[ -n "$window_list" ]]; then
     windows=$window_list
@@ -28,21 +35,17 @@ else
 fi
 
 window=$(awk '
-  BEGIN { best=0; id="" }
   {
-    area=$6*$7; class=tolower($8); title="";
+    title="";
     for (i=10; i<=NF; i++) title=title (i==10 ? "" : " ") $i;
     low=tolower(title);
     if (low ~ /psvr2toolkit\.unitysetup/) { print $1; exit }
-    if (class ~ /(steam|wayvr|gnome-shell|codex-desktop)/) next;
-    if (low ~ /^(steam|chatgpt)$/) next;
-    if (area > best) { best=area; id=$1 }
+    if (low ~ /^psvr2 spectator view$/) { print $1; exit }
   }
-  END { if (id != "") print id }
 ' <<<"$windows" | head -n1)
 
 if [[ -z "$window" ]]; then
-    fail "No capturable XWayland VR mirror was found"
+    fail "PSVR2 Spectator View is not available"
 fi
 
 if [[ ${1:-} == "--print-window" ]]; then

@@ -1,47 +1,77 @@
 diff --git a/src/xrt/auxiliary/util/u_debug_gui.c b/src/xrt/auxiliary/util/u_debug_gui.c
-index a0b6005..0c9bf23 100644
+index a0b6005cb..0c9bf2331 100644
 --- a/src/xrt/auxiliary/util/u_debug_gui.c
 +++ b/src/xrt/auxiliary/util/u_debug_gui.c
-@@ -63,2 +63,3 @@ u_debug_gui_stop(struct u_debug_gui **debug_ui)
+@@ -61,6 +61,7 @@ u_debug_gui_stop(struct u_debug_gui **debug_ui)
+ #include <SDL2/SDL.h>
+ 
  DEBUG_GET_ONCE_BOOL_OPTION(gui, "XRT_DEBUG_GUI", false)
 +DEBUG_GET_ONCE_BOOL_OPTION(spectator_mode, "XRT_SPECTATOR_MODE", false)
  #ifdef XRT_BUILD_DRIVER_QWERTY
-@@ -125,2 +126,6 @@ sdl2_window_init(struct u_debug_gui *p)
+ DEBUG_GET_ONCE_BOOL_OPTION(qwerty_enable, "QWERTY_ENABLE", false)
+ #endif
+@@ -123,6 +124,10 @@ sdl2_window_init(struct u_debug_gui *p)
+ 	window_flags |= SDL_WINDOW_OPENGL;
+ 	window_flags |= SDL_WINDOW_RESIZABLE;
  	window_flags |= SDL_WINDOW_ALLOW_HIGHDPI;
 +	if (debug_get_bool_option_spectator_mode()) {
 +		window_flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 +		window_flags |= SDL_WINDOW_BORDERLESS;
 +	}
  #if 0
-@@ -134,2 +139,5 @@ sdl2_window_init(struct u_debug_gui *p)
+ 	window_flags |= SDL_WINDOW_MAXIMIZED;
+ #endif
+@@ -132,6 +137,9 @@ sdl2_window_init(struct u_debug_gui *p)
+ 		U_LOG_E("Failed to create window!");
+ 		return;
  	}
 +	if (debug_get_bool_option_spectator_mode()) {
 +		SDL_SetWindowTitle(p->win, "PSVR2 Spectator View");
 +	}
  
+ 	p->ctx = SDL_GL_CreateContext(p->win);
+ 	if (p->ctx == NULL) {
 diff --git a/src/xrt/state_trackers/gui/gui_scene_debug.c b/src/xrt/state_trackers/gui/gui_scene_debug.c
-index 6c8efca..ec9320e 100644
+index 6c8efcac1..38ac28a72 100644
 --- a/src/xrt/state_trackers/gui/gui_scene_debug.c
 +++ b/src/xrt/state_trackers/gui/gui_scene_debug.c
-@@ -129,2 +129,3 @@ struct plot_state
+@@ -127,6 +127,7 @@ struct plot_state
+ };
+ 
  DEBUG_GET_ONCE_BOOL_OPTION(curated_gui, "XRT_CURATED_GUI", false)
 +DEBUG_GET_ONCE_BOOL_OPTION(spectator_mode, "XRT_SPECTATOR_MODE", false)
  
-@@ -958,3 +959,6 @@ curated_render(struct debug_scene *ds, struct gui_program *p)
+ 
+ /*
+@@ -956,9 +957,12 @@ curated_render(struct debug_scene *ds, struct gui_program *p)
+ 	// Collect the variables.
+ 	u_var_visit(curated_on_root_enter, curated_on_root_exit, curated_on_elem, &cs);
  
 -	// Always enable the mirror sink.
+-	if (cs.mirror.enable != NULL) {
+-		*(bool *)cs.mirror.enable->ptr = true;
 +	bool spectator_mode = debug_get_bool_option_spectator_mode();
 +
-+	// Force Monado's scratch view so the spectator can import it without a
-+	// blocking GPU-to-CPU readback.
- 	if (cs.mirror.enable != NULL) {
-@@ -968,2 +972,9 @@ curated_render(struct debug_scene *ds, struct gui_program *p)
++	// Use the synchronized readback sink for the compositor's undistorted eye.
++	// The native debug image can race the renderer and expose incomplete data.
++	if (spectator_mode && cs.readback.enable != NULL) {
++		*(bool *)cs.readback.enable->ptr = true;
+ 	}
+ 
+ 	// Always set the clear colour.
+@@ -966,5 +970,15 @@ curated_render(struct debug_scene *ds, struct gui_program *p)
+ 		*(struct xrt_colour_rgb_f32 *)cs.clear->ptr = (struct xrt_colour_rgb_f32){0.f, 0.f, 0.f};
+ 	}
  
 +	if (spectator_mode) {
-+		if (cs.mirror.view_0 != NULL) {
-+			draw_native_images_to_background(cs.mirror.view_0, &cs.ds);
++		if (cs.readback.sink != NULL) {
++			struct debug_record *dr = ensure_debug_record_created(cs.readback.sink->ptr, &cs.ds);
++			if (dr != NULL) {
++				gui_window_record_to_background(&dr->rw, p);
++			}
 +		}
 +		return;
 +	}
 +
  	// Start drawing.
+ 	igBegin("Monado", NULL, 0);

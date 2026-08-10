@@ -12,6 +12,9 @@ if ! flock -n 9; then
     echo "PSVR2 Room Setup is already running." >&2
     exit 0
 fi
+room_setup_marker="$lock_dir/psvr2-room-setup-active"
+touch "$room_setup_marker"
+trap 'rm -f -- "$room_setup_marker"' EXIT
 
 for state_dir in \
     "$HOME/.config/unity3d/Bnuuy Solutions/PSVR2Toolkit.UnitySetup" \
@@ -22,6 +25,7 @@ for state_dir in \
 done
 
 helper_dir="${PSVR2_HELPER_DIR:-$HOME/.local/bin}"
+export PSVR2_RUNTIME_ONLY=1
 "$helper_dir/psvr2-fossvr-start"
 
 # The live camera mesh is created from the HMD pose captured when Unity starts.
@@ -37,7 +41,12 @@ chaperone="$STEAM_ROOT/config/playstation_vr2/chaperone_info.vrchap"
 boundary_meta="$STEAM_ROOT/config/playstation_vr2/sceBoundaryMeta.bin"
 map_database="$STEAM_ROOT/config/playstation_vr2/sceMapDb.bin"
 calibration_files=("$chaperone" "$boundary_meta" "$map_database")
-if [[ ! -e "$chaperone" ]] || { \
+# Runtime-only mode deliberately permits Room Setup to repair a calibration
+# that normal startup has rejected. Waiting for that same calibration to become
+# healthy here creates a deadlock.
+if [[ "${PSVR2_RUNTIME_ONLY:-0}" == 1 ]]; then
+    tracking_ready=true
+elif [[ ! -e "$chaperone" ]] || { \
     [[ -r "$chaperone" ]] \
     && grep -Eq '"play_area"[[:space:]]*:[[:space:]]*\[[[:space:]]*0([.]0+)?[[:space:]]*,[[:space:]]*0([.]0+)?[[:space:]]*\]' "$chaperone" \
     && grep -Eq '"collision_bounds"[[:space:]]*:[[:space:]]*null' "$chaperone"; }; then
@@ -91,7 +100,11 @@ restore_chaperone() {
         systemctl --user start psvr2-chaperone.service 2>/dev/null || true
     fi
 }
-trap restore_chaperone EXIT
+cleanup_room_setup() {
+    restore_chaperone
+    rm -f -- "$room_setup_marker"
+}
+trap cleanup_room_setup EXIT
 
 roomsetup_env=()
 roomsetup_env+=("PSVR2_ROOM_SETUP_LAUNCH=1")
@@ -208,6 +221,20 @@ if [[ "$calibration_changed" != true ]] && [[ "$(calibration_digest)" != "$initi
 fi
 
 if [[ "$calibration_changed" == true ]]; then
+    authoritative="$PSVR2_SETUP_ROOT/room-calibration-current"
+    authoritative_tmp="$PSVR2_SETUP_ROOT/.room-calibration-current.$BASHPID"
+    install -d -m 0700 "$authoritative_tmp"
+    for file in "${calibration_files[@]}"; do
+        install -m 0600 "$file" "$authoritative_tmp/$(basename "$file")"
+    done
+    authoritative_previous="$PSVR2_SETUP_ROOT/.room-calibration-previous.$BASHPID"
+    if [[ -d "$authoritative" ]]; then
+        mv -- "$authoritative" "$authoritative_previous"
+    fi
+    mv -- "$authoritative_tmp" "$authoritative"
+    if [[ -d "$authoritative_previous" ]]; then
+        find "$authoritative_previous" -depth -delete
+    fi
     notify-send 'PSVR2 play area saved' \
         'Reloading the VR origin and returning to WayVR.' 2>/dev/null || true
 fi
@@ -223,6 +250,7 @@ PSVR2_DISCONNECT_CONTROLLERS=0 "$helper_dir/psvr2-fossvr-stop"
 # asynchronously. Give them time to settle before reacquiring the HMD.
 sleep 6
 started=false
+unset PSVR2_RUNTIME_ONLY
 for _ in 1 2 3; do
     if "$helper_dir/psvr2-fossvr-start"; then
         started=true

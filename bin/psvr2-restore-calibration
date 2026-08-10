@@ -1,0 +1,31 @@
+#!/usr/bin/bash
+set -euo pipefail
+source "$HOME/.local/lib/psvr2-linux/common.sh"
+
+authoritative="$PSVR2_SETUP_ROOT/room-calibration-current"
+destination="$STEAM_ROOT/config/playstation_vr2"
+files=(chaperone_info.vrchap sceBoundaryMeta.bin sceMapDb.bin)
+
+# No snapshot is normal until the first Room Setup completed under this
+# version. Never manufacture one from a possibly half-updated live set.
+for name in "${files[@]}"; do
+    [[ -s "$authoritative/$name" ]] || exit 0
+done
+grep -Eq '"collision_bounds"[[:space:]]*:[[:space:]]*\[' \
+    "$authoritative/chaperone_info.vrchap" || {
+    echo "Refusing invalid authoritative PSVR2 calibration" >&2
+    exit 1
+}
+
+install -d -m 0700 "$destination"
+restored=0
+for name in "${files[@]}"; do
+    if [[ ! -e "$destination/$name" ]] \
+        || ! cmp -s "$authoritative/$name" "$destination/$name"; then
+        install -m 0600 "$authoritative/$name" "$destination/$name"
+        restored=1
+    fi
+done
+if (( restored )); then
+    echo "Restored authoritative PSVR2 room calibration."
+fi

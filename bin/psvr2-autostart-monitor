@@ -18,9 +18,13 @@ startup_retry_attempts=${PSVR2_STARTUP_RETRY_ATTEMPTS:-3}
 runtime_failure_streak_threshold=${PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD:-2}
 runtime_recovery_cooldown=${PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS:-90}
 runtime_retry_cooldown=${PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS:-$runtime_recovery_cooldown}
+tracking_loss_checks=${PSVR2_TRACKING_LOSS_CHECKS:-3}
+tracking_recovery_checks=${PSVR2_TRACKING_RECOVERY_CHECKS:-3}
+tracking_restart_seconds=${PSVR2_TRACKING_RESTART_SECONDS:-60}
 required_usb_interfaces=${PSVR2_USB_INTERFACE_MINIMUM:-11}
 suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 game_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-game-active"
+room_setup_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-room-setup-active"
 cooldown_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-startup-cooldown"
 runtime_failure_state_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-startup-failure-state"
 runtime_test_state_file="${PSVR2_TEST_RUNTIME_STATE_FILE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-runtime-active-test}"
@@ -31,6 +35,10 @@ stop_helper="$helper_dir/psvr2-fossvr-stop"
 bluetoothctl_bin=$(command -v bluetoothctl 2>/dev/null || true)
 next_retry=0
 runtime_failure_streak=0
+tracking_bad_checks=0
+tracking_good_checks=0
+tracking_suspended=0
+tracking_bad_since=0
 
 load_runtime_failure_state() {
     if [[ -r "$runtime_failure_state_file" ]]; then
@@ -198,6 +206,53 @@ connected_controller_count() {
     else
         printf '%s\n' "$count_hid"
     fi
+}
+
+suspend_tracking_dependents() {
+    echo "PSVR2 lost its room-anchored 6DoF origin; pausing VR clients while it relocalizes" >&2
+    [[ ! -x "$helper_dir/psvr2-stop-games" ]] || "$helper_dir/psvr2-stop-games" || true
+    systemctl --user stop psvr2-fossvr-wayvr.service psvr2-chaperone.service 2>/dev/null || true
+    tracking_suspended=1
+    tracking_bad_since=$SECONDS
+}
+
+resume_tracking_dependents() {
+    echo "PSVR2 room-anchored 6DoF recovered; recreating dashboard and chaperone sessions"
+    systemctl --user start psvr2-fossvr-wayvr.service || return 1
+    if [[ "${PSVR2_CHAPERONE_ENABLE:-0}" == 1 ]] && [[ -x "${PSVR2_CHAPERONE_BINARY:-}" ]]; then
+        systemctl --user restart psvr2-chaperone.service || true
+    fi
+    tracking_suspended=0
+    tracking_bad_since=0
+}
+
+guard_tracking_origin() {
+    local pid
+    pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value 2>/dev/null || echo 0)
+    if psvr2_tracking_is_stable "$pid"; then
+        tracking_bad_checks=0
+        tracking_good_checks=$((tracking_good_checks + 1))
+        if (( tracking_suspended )) && (( tracking_good_checks >= tracking_recovery_checks )); then
+            resume_tracking_dependents || true
+        fi
+        return 0
+    fi
+
+    tracking_good_checks=0
+    tracking_bad_checks=$((tracking_bad_checks + 1))
+    if (( ! tracking_suspended )) && (( tracking_bad_checks >= tracking_loss_checks )); then
+        suspend_tracking_dependents
+    fi
+    if (( tracking_suspended )) && (( tracking_bad_since > 0 )) \
+        && (( SECONDS - tracking_bad_since >= tracking_restart_seconds )); then
+        echo "PSVR2 did not relocalize within ${tracking_restart_seconds}s; recycling the runtime" >&2
+        PSVR2_AUTOMATED_STOP=1 "$stop_helper" || true
+        tracking_suspended=0
+        tracking_bad_since=0
+        tracking_bad_checks=0
+        next_retry=$((SECONDS + startup_retry_base))
+    fi
+    return 1
 }
 
 is_runtime_active() {
@@ -413,7 +468,16 @@ while true; do
             systemctl --user restart psvr2-fossvr-wayvr.service || true
         fi
         previous_controllers=$controllers
+        if is_runtime_active && [[ ! -e "$room_setup_active_file" ]]; then
+            guard_tracking_origin || true
+        else
+            tracking_bad_checks=0
+            tracking_good_checks=0
+            tracking_suspended=0
+            tracking_bad_since=0
+        fi
         if is_runtime_active \
+            && (( ! tracking_suspended )) \
             && [[ ! -e "$game_active_file" ]] \
             && ! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then
             echo "PSVR2 WayVR dashboard is not running while runtime is active; restarting it"
