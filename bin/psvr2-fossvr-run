@@ -35,6 +35,12 @@ export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
 export VR_OVERRIDE="$ENVISION_PROFILE_ROOT/xrizer/target/release"
 export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
 export OXR_ZERO_TIME_IS_NOW=1
+# Present parallel application views on canted-display headsets such as PSVR2.
+# Some engines build their projection or UI culling around parallel cameras;
+# Monado applies the physical cant again in the compositor.  This Monado-only
+# compatibility switch is inert on parallel headsets and avoids per-title
+# launch exceptions for affected OpenXR and translated OpenVR applications.
+export OXR_PARALLEL_VIEWS=1
 export PRESSURE_VESSEL_FILESYSTEMS_RW="$socket${PRESSURE_VESSEL_FILESYSTEMS_RW:+:$PRESSURE_VESSEL_FILESYSTEMS_RW}"
 # Keep every game-side Vulkan/DXVK device on the same dGPU as Monado. Hybrid
 # systems otherwise let secondary DLLs select the iGPU, which deadlocks shared
