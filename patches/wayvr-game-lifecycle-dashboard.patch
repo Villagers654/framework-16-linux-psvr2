@@ -1,0 +1,80 @@
+--- a/wayvr/src/backend/task.rs
++++ b/wayvr/src/backend/task.rs
+@@ -114,6 +114,7 @@
+     DeleteActiveSet,
+     ToggleEditMode,
+     ToggleDashboard,
++    SetDashboardVisible(bool),
+     ShowHide,
+     CleanupMirrors,
+     SettingsChanged,
+--- a/wayvr/src/windowing/manager.rs
++++ b/wayvr/src/windowing/manager.rs
+@@ -258,6 +258,21 @@
+                     self.visible_overlays_changed(app)?;
+                 }
+             }
++            OverlayTask::SetDashboardVisible(visible) => {
++                if let Some(overlay) =
++                    self.mut_by_selector(&OverlaySelector::Name(DASH_NAME.into()))
++                {
++                    if overlay.config.is_active() == visible {
++                        return Ok(());
++                    }
++                    if visible {
++                        overlay.config.activate(app);
++                    } else {
++                        overlay.config.deactivate();
++                    }
++                    self.visible_overlays_changed(app)?;
++                }
++            }
+             OverlayTask::AddSet => {
+                 let new_idx = self.sets.len();
+                 if new_idx >= MAX_OVERLAY_SETS {
+--- a/wayvr/src/backend/openxr/mod.rs
++++ b/wayvr/src/backend/openxr/mod.rs
+@@ -1,6 +1,7 @@
+ use std::{
+     collections::VecDeque,
+     ops::Add,
++    path::PathBuf,
+     sync::{Arc, atomic::Ordering},
+     time::{Duration, Instant},
+ };
+@@ -185,6 +186,11 @@
+     let mut environment_blend_mode = modes[0];
+     let mut last_frame_time = Instant::now();
+     let mut screenshot_chord = ScreenshotChord::default();
++    let game_active_marker = std::env::var_os("XDG_RUNTIME_DIR")
++        .map(PathBuf::from)
++        .map(|dir| dir.join("psvr2-game-active"));
++    let mut game_active = None;
++    let mut next_game_active_check = Instant::now();
+     let mut device_refresh_interval;
+     let mut device_refresh_fails = 0u8;
+ 
+@@ -194,6 +200,23 @@
+         last_frame_time = now;
+         let cur_frame = FRAME_COUNTER.fetch_add(1, Ordering::Relaxed);
+ 
++        if next_game_active_check <= now {
++            if let Some(marker) = game_active_marker.as_ref() {
++                let active = marker.exists();
++                if game_active != Some(active) {
++                    // Preserve WayVR's normal startup state when no game is active,
++                    // but hide on an active launch/restart and restore on game exit.
++                    if game_active.is_some() || active {
++                        app.tasks.enqueue(TaskType::Overlay(
++                            OverlayTask::SetDashboardVisible(!active),
++                        ));
++                    }
++                    game_active = Some(active);
++                }
++            }
++            next_game_active_check = now + Duration::from_millis(250);
++        }
++
+         if !RUNNING.load(Ordering::Relaxed) {
+             log::warn!("Received shutdown signal.");
+             match xr_state.session.request_exit() {

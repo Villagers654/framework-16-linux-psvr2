@@ -22,6 +22,8 @@ if CONFIG.exists():
     if match:
         STEAM = Path(os.path.expandvars(match.group(1))).expanduser()
 STATE = HOME / ".local/share/psvr2-setup/steam-vr-apps.json"
+RUNTIME_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
+GAME_ACTIVE = RUNTIME_DIR / "psvr2-game-active"
 VR_MANIFEST = STEAM / "config/steamapps.vrmanifest"
 WRAPPER = str(HOME / ".local/bin/psvr2-fossvr-run")
 LOCAL_RIFTLIFT = HOME / ".local/bin/riftlift"
@@ -290,6 +292,10 @@ def restart_wayvr_dashboard() -> None:
         print(
             "PSVR2: PSVR2_SYNC_RESTART_DASHBOARD is disabled; skipping WayVR restart."
         )
+        return
+
+    if GAME_ACTIVE.exists():
+        print("PSVR2: a VR game is active; deferring the WayVR dashboard refresh.")
         return
 
     cmd = ["systemctl", "--user", "is-active", "--quiet", "psvr2-fossvr-wayvr.service"]

@@ -126,4 +126,35 @@ sleep 1
 HOME="$test_home" PSVR2_SYNC_RESTART_DASHBOARD=0 \
   python3 "$repo/bin/psvr2-sync-steam-vr-games" --discovery-only
 test "$(stat -c '%Y' "$state")" = "$state_mtime"
+
+# A metadata refresh must never restart WayVR over a running title. The shared
+# launch marker is the authoritative lifecycle state for Steam and Rift games.
+XDG_RUNTIME_DIR="$workspace/runtime" REPO="$repo" python3 - <<'PY'
+import importlib.machinery
+import os
+from pathlib import Path
+from types import SimpleNamespace
+
+runtime = Path(os.environ["XDG_RUNTIME_DIR"])
+runtime.mkdir()
+loader = importlib.machinery.SourceFileLoader(
+    "steam_sync", str(Path(os.environ["REPO"]) / "bin/psvr2-sync-steam-vr-games")
+)
+steam_sync = loader.load_module()
+calls = []
+
+def fake_run(command, **_kwargs):
+    calls.append(command)
+    return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+steam_sync.subprocess.run = fake_run
+steam_sync.GAME_ACTIVE.touch()
+steam_sync.restart_wayvr_dashboard()
+assert calls == [], calls
+steam_sync.GAME_ACTIVE.unlink()
+steam_sync.restart_wayvr_dashboard()
+assert calls[-1] == [
+    "systemctl", "--user", "restart", "psvr2-fossvr-wayvr.service"
+], calls
+PY
 echo "Steam metadata sync test passed."
