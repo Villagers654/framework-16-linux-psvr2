@@ -7,8 +7,18 @@ audio_helper="$helper_dir/psvr2-audio"
 controller_disconnect="$helper_dir/psvr2-controller-disconnect"
 game_stop_helper="$helper_dir/psvr2-stop-games"
 lock_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+# A disconnect must preempt Room Setup before waiting for the shared lifecycle
+# lock. Room Setup can hold that lock inside its nested runtime start while it
+# waits for tracking that can no longer recover after USB/DP disappears.
+if [[ "${PSVR2_AUTOMATED_STOP:-0}" == 1 ]]; then
+    systemctl --user stop psvr2-room-setup.service 2>/dev/null || true
+fi
+
 exec 8>"$lock_dir/psvr2-fossvr-start.lock"
-flock 8
+if ! flock -w "${PSVR2_STOP_LOCK_TIMEOUT_SECONDS:-10}" 8; then
+    echo "PSVR2 lifecycle lock did not clear; forcing disconnect teardown" >&2
+fi
 if [[ "${PSVR2_AUTOMATED_STOP:-0}" != 1 ]]; then
     touch "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 fi
@@ -32,6 +42,12 @@ if [[ "$state" != inactive && "$state" != failed ]]; then
     systemctl --user kill --kill-whom=all --signal=SIGKILL psvr2-fossvr.service || true
 fi
 systemctl --user stop psvr2-fossvr.service || true
+systemctl --user reset-failed \
+    psvr2-room-setup.service \
+    psvr2-fossvr.service \
+    psvr2-fossvr-wayvr.service \
+    psvr2-chaperone.service \
+    psvr2-screenshot-listener.service 2>/dev/null || true
 if [[ "${PSVR2_DISCONNECT_CONTROLLERS:-0}" == "1" ]] && \
     [[ "${PSVR2_AUTOMATED_STOP:-0}" != "1" ]] && [[ -x "$controller_disconnect" ]]; then
     "$controller_disconnect" || true

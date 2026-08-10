@@ -131,6 +131,7 @@ if command -v systemd-analyze >/dev/null 2>&1; then
 fi
 
 ./scripts/verify-reconnect-cycle.sh
+./scripts/test-disconnect-stop.sh
 ./scripts/test-steam-sync.sh
 ./scripts/test-stop-games.sh
 echo "Repository checks passed."
