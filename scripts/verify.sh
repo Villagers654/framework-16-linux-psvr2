@@ -37,8 +37,8 @@ check bash -c 'configured=$(jq -r ".user_profiles[] | select(.uuid==\"psvr2-tool
     "$HOME/.config/envision/envision.json"
 check bash -c 'configured=$(jq -r ".user_profiles[] | select(.uuid==\"psvr2-toolkit-monado\") | .xrservice_cmake_flags.XRT_BUILD_DRIVER_PSSENSE // \"\" " "$1" 2>/dev/null || true); [[ "$configured" == "ON" ]]' _ \
     "$HOME/.config/envision/envision.json"
-check test -f "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/release/libxrizer.so"
-check grep -aFq 'Raw tracking space removes chaperone' "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/target/release/libxrizer.so"
+check test -f "$HOME/.local/share/envision/psvr2-toolkit-monado/riftlift/components/xrizer/target/release/libxrizer.so"
+check grep -aFq 'Raw tracking space removes chaperone' "$HOME/.local/share/envision/psvr2-toolkit-monado/riftlift/components/xrizer/target/release/libxrizer.so"
 check grep -Fq 'XRIZER_FORCE_RAW_TRACKING_SPACE=1' "$HOME/.local/bin/psvr2-room-setup"
 check grep -Fq 'PSVR2 play area saved' "$HOME/.local/bin/psvr2-room-setup"
 check grep -Fq 'psvr2-room-setup.service' "$repo/patches/wayvr-psvr2-dashboard.patch"

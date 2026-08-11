@@ -10,7 +10,7 @@
   — room-scale boundary, floor, IPD, and eye calibration utility.
 - [Supremium Monado branch](https://gitlab.freedesktop.org/Supremium/monado/-/tree/psvr2-linux-steam-lh)
   — Monado with the SteamVR lighthouse-driver bridge used for Toolkit.
-- [RiftLift xrizer](https://github.com/Villagers654/xrizer) — maintained
+- [RiftLift xrizer component](https://github.com/Villagers654/RiftLift/tree/main/components/xrizer) — maintained
   OpenVR-on-OpenXR translation, stage bounds, and Linux room-setup support.
 - [WayVR](https://github.com/wayvr-org/wayvr) — in-headset launcher, desktop,
   and dashboard.

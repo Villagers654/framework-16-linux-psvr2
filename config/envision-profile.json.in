@@ -15,9 +15,9 @@
   "opencomposite_branch": null,
   "ovr_comp": {
     "mod_type": "Xrizer",
-    "repo": "https://github.com/Villagers654/xrizer",
+    "repo": "https://github.com/Villagers654/RiftLift",
     "branch": "main",
-    "path": "@HOME@/.local/share/envision/psvr2-toolkit-monado/xrizer"
+    "path": "@HOME@/.local/share/envision/psvr2-toolkit-monado/riftlift/components/xrizer"
   },
   "features": {
     "libsurvive": {"feature_type":"Libsurvive","enabled":false,"path":"@HOME@/.local/share/envision/psvr2-toolkit-monado/libsurvive","repo":null,"branch":null},

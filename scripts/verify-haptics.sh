@@ -30,12 +30,13 @@ check "WayVR controller haptic output paths are in the patched dashboard actions
     'grep -qF "/user/hand/left/output/haptic" "$0" && grep -qF "/user/hand/right/output/haptic" "$0"' \
     "$repo/patches/wayvr-psvr2-dashboard.patch"
 
-if [[ -d "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer/src" ]]; then
+xrizer_src="$HOME/.local/share/envision/psvr2-toolkit-monado/riftlift/components/xrizer"
+if [[ -d "$xrizer_src/src" ]]; then
     check "local xrizer source still has haptic action wiring" bash -c \
         'rg -q "/user/hand/(left|right)/output/haptic|fn legacy_haptic" "$0/src/input.rs" "$0/src/input/legacy.rs" "$0/src/input/action_manifest.rs"' \
-        "$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer"
+        "$xrizer_src"
 else
-    echo "WARN  local xrizer source is not present for deeper haptics validation: $HOME/.local/share/envision/psvr2-toolkit-monado/xrizer"
+    echo "WARN  local xrizer source is not present for deeper haptics validation: $xrizer_src"
 fi
 
 monado_prefix="$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado"
@@ -46,7 +47,6 @@ else
 fi
 
 if [[ -f "$repo/patches/monado-psvr2-sense.patch" ]]; then
-    xrizer_src="$HOME/.local/share/envision/psvr2-toolkit-monado/xrizer"
     if command -v cargo >/dev/null && [[ -x "$xrizer_src/target/release/xrizer" || -f "$xrizer_src/target/release/libxrizer.so" ]]; then
         check "xrizer legacy haptics test passes (requires local Rust toolchain and source rebuild)" bash -c \
             'cd "$0" && cargo test legacy_haptic -- --nocapture' \

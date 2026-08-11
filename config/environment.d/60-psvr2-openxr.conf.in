@@ -1,6 +1,6 @@
 # Make the community Monado + xrizer stack available to every Steam title,
 # including newly-installed games before per-game launch metadata is cached.
 XR_RUNTIME_JSON=@MONADO_PREFIX@/share/openxr/1/openxr_monado.json
-VR_OVERRIDE=@ENVISION_PROFILE_ROOT@/xrizer/target/release
+VR_OVERRIDE=@ENVISION_PROFILE_ROOT@/riftlift/components/xrizer/target/release
 PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
 PRESSURE_VESSEL_FILESYSTEMS_RW=${XDG_RUNTIME_DIR}/monado_comp_ipc

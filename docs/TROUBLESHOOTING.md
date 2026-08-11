@@ -155,7 +155,7 @@ This is not a standing-only calibration problem. It means the app's optional
 ./scripts/prepare-envision-runtime.sh
 ```
 
-The binding supplies Sense actions; the maintained RiftLift xrizer fork supplies proximity
+The binding supplies Sense actions; RiftLift's maintained xrizer component supplies proximity
 only when `psvr2-room-setup` sets `XRIZER_FORCE_HEADSET_ON_HEAD=1`.
 
 ## Boundary warning overlay is missing or not showing in games
@@ -209,7 +209,7 @@ driver's raw tracking universe. Unmodified upstream xrizer maps OpenVR
 `RawAndUncalibrated` to STAGE, so the mismatch appears only after a room
 calibration has been saved and the runtime restarted.
 
-The maintained RiftLift xrizer fork implements a dedicated raw space by removing
+RiftLift's maintained xrizer component implements a dedicated raw space by removing
 that exact saved chaperone transform. `psvr2-room-setup` enables it only for
 Room Setup; normal applications keep calibrated STAGE coordinates. Re-run
 `./scripts/prepare-envision-runtime.sh`, rebuild the Envision profile, and then

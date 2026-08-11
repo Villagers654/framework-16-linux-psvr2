@@ -65,23 +65,23 @@ for patch in "${monado_patches[@]}"; do
 done
 git -C "$root/xrservice" diff --check
 
-if [[ ! -d "$root/xrizer/.git" ]]; then
-  git clone --recurse-submodules https://github.com/Villagers654/xrizer "$root/xrizer"
+riftlift_source="$root/riftlift"
+if [[ ! -d "$riftlift_source/.git" ]]; then
+  git clone --recurse-submodules https://github.com/Villagers654/RiftLift "$riftlift_source"
 fi
-# Migrate the exact formerly managed upstream checkout. Its working-tree diff
-# consisted only of this repository's retired xrizer patches; the maintained
-# fork now contains those changes. Never discard changes on any other commit.
-if [[ $(git -C "$root/xrizer" rev-parse HEAD) == 6c3e45f4c18b014a7aba87282ee0677306315052 ]]; then
-  git -C "$root/xrizer" reset --hard
-elif ! git -C "$root/xrizer" diff --quiet || ! git -C "$root/xrizer" diff --cached --quiet; then
-  echo "Refusing to overwrite unmanaged changes in $root/xrizer" >&2
+if ! git -C "$riftlift_source" diff --quiet || ! git -C "$riftlift_source" diff --cached --quiet; then
+  echo "Refusing to overwrite unmanaged changes in $riftlift_source" >&2
   exit 1
 fi
-git -C "$root/xrizer" remote set-url origin https://github.com/Villagers654/xrizer
-git -C "$root/xrizer" fetch origin main
-git -C "$root/xrizer" checkout --detach 7b5f7e5b6d3c134f951a5547f0466880e7458477
-git -C "$root/xrizer" submodule update --init --recursive
-git -C "$root/xrizer" diff --check
+git -C "$riftlift_source" remote set-url origin https://github.com/Villagers654/RiftLift
+git -C "$riftlift_source" fetch origin main
+git -C "$riftlift_source" checkout --detach 0f843fd94aa6507cd53f440fa099dfc1f1ab2bcd
+git -C "$riftlift_source" submodule update --init --recursive
+git -C "$riftlift_source" diff --check
+[[ -f "$riftlift_source/components/xrizer/Cargo.toml" ]] || {
+  echo "RiftLift's xrizer component is missing." >&2
+  exit 1
+}
 
 dri_prime=""
 [[ -z "$DGPU_PCI_ADDRESS" ]] || dri_prime="pci-${DGPU_PCI_ADDRESS//:/_}"

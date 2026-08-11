@@ -230,7 +230,7 @@ the manual launcher when you want VR again.
 | Ignition | `v1.0.0` |
 | PSVR2Toolkit.UnitySetup | `v1.1.0` |
 | Supremium Monado branch | `psvr2-linux-steam-lh` at `8bd01e7edec8028f65c7bff925195f0454d4bc9f` |
-| [RiftLift xrizer](https://github.com/Villagers654/xrizer) | `7b5f7e5b6d3c134f951a5547f0466880e7458477` |
+| [RiftLift xrizer component](https://github.com/Villagers654/RiftLift/tree/main/components/xrizer) | RiftLift `0f843fd94aa6507cd53f440fa099dfc1f1ab2bcd` |
 | WayVR | `d93b74cc8aa01ea17d72d46ce016e47286409f92` (26.7.1) |
 | xr-chaperone | `a0351bd00f208e9f7c7917d413de2accbf9208eb` |
 

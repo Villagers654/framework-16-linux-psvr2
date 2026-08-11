@@ -58,7 +58,7 @@ repairing BlueZ's rare connected-without-HID state. Do not publish those values.
 ## 4. Room-scale setup
 
 Choose **PSVR2 Room Setup** in WayVR's Games grid or launch
-`psvr2-room-setup`. The RiftLift xrizer fork supplies the HMD proximity signal
+`psvr2-room-setup`. RiftLift's xrizer component supplies the HMD proximity signal
 that standard OpenXR controller bindings cannot express, so a centered 2×2 m default polygon is
 created automatically. The setup app writes the active `chaperone_info.vrchap`
 play area file that Monado reads at startup; this is the source of the in-headset

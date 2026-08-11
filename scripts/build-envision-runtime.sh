@@ -13,8 +13,8 @@ for command in brew cargo cmake grep nm strings; do
 done
 
 monado_source="$ENVISION_PROFILE_ROOT/xrservice"
-xrizer_source="$ENVISION_PROFILE_ROOT/xrizer"
-[[ -d "$monado_source/.git" && -d "$xrizer_source/.git" ]] || {
+xrizer_source="$ENVISION_PROFILE_ROOT/riftlift/components/xrizer"
+[[ -d "$monado_source/.git" && -d "$ENVISION_PROFILE_ROOT/riftlift/.git" && -f "$xrizer_source/Cargo.toml" ]] || {
   echo "Prepared Envision sources were not found; run ./scripts/prepare-envision-runtime.sh first." >&2
   exit 1
 }
