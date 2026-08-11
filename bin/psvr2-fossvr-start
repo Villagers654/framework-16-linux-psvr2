@@ -94,7 +94,6 @@ fi
 # the host-built Monado binary.  Only run build/profile validation when a new
 # runtime is actually needed, and use a byte-string check that works both on
 # the host and from Steam launch containers.
-"$helper_dir/psvr2-sync-steam-vr-games" --discovery-only || true
 assert_monado_profile_supports_psvr2
 assert_monado_binary_has_psvr2_builder
 "$helper_dir/psvr2-restore-calibration"

@@ -32,6 +32,7 @@ grep -Fq 'PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1' \
   config/environment.d/60-psvr2-openxr.conf.in
 grep -Fq 'psvr2-sync-steam-vr-games --discovery-only' \
   systemd/user/psvr2-steam-vr-sync.service
+! grep -Fq 'psvr2-sync-steam-vr-games' bin/psvr2-fossvr-start
 grep -Fq '\[HMD\] Track at p:.*\(st: 2 1 4\)' bin/psvr2-room-setup
 grep -Fq '\[HMD\] (Jump|Lost)' bin/psvr2-room-setup
 grep -Fq 'systemctl --user stop psvr2-chaperone.service' bin/psvr2-room-setup
@@ -49,6 +50,7 @@ grep -Fq 'unit == "psvr2-dgpu-power.service" && verb == "stop"' \
   polkit/49-psvr2-usb-recover.rules
 grep -Fq 'ENV{PRODUCT}=="54c/cde/*"' udev/71-psvr2-dgpu-power.rules
 grep -Fq '"$usb_reset_helper"' bin/psvr2-autostart-monitor
+grep -Fq 'prime_usb_session' bin/psvr2-autostart-monitor
 grep -Fq 'psvr2-usb-recover.service' bin/psvr2-autostart-monitor
 grep -Fq 'PSVR2_AUTOMATED_STOP=1 "$stop_helper"' bin/psvr2-autostart-monitor
 ! grep -Fq 'wait_for_psvr2_tracking' bin/psvr2-fossvr-start

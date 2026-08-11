@@ -23,6 +23,8 @@ missing_usb_recovery_cooldown=${PSVR2_MISSING_USB_RECOVERY_SECONDS:-15}
 tracking_loss_checks=${PSVR2_TRACKING_LOSS_CHECKS:-3}
 tracking_recovery_checks=${PSVR2_TRACKING_RECOVERY_CHECKS:-3}
 required_usb_interfaces=${PSVR2_USB_INTERFACE_MINIMUM:-11}
+prime_usb_before_start=${PSVR2_PRIME_USB_BEFORE_START:-1}
+usb_prime_stability_checks=${PSVR2_USB_PRIME_STABILITY_CHECKS:-2}
 suppress_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 room_setup_active_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-room-setup-active"
 cooldown_file="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-startup-cooldown"
@@ -41,6 +43,7 @@ tracking_good_checks=0
 tracking_suspended=0
 tracking_established=0
 next_missing_usb_recovery=0
+usb_primed=0
 
 load_runtime_failure_state() {
     if [[ -r "$runtime_failure_state_file" ]]; then
@@ -336,6 +339,7 @@ full_recovery_cycle() {
         echo "Resetting the unresponsive PSVR2 USB function before retrying"
         if [[ -x "$usb_reset_helper" ]] && "$usb_reset_helper"; then
             cooldown=$usb_recovery_cooldown
+            usb_primed=1
         else
             echo "Automatic PSVR2 USB recovery failed; using a software-only retry" >&2
         fi
@@ -346,26 +350,48 @@ full_recovery_cycle() {
     next_retry=$((SECONDS + cooldown))
 }
 
+prime_usb_session() {
+    (( usb_primed == 0 )) || return 0
+    # Sony's USB function can finish enumerating before its interfaces are
+    # actually ready for the proprietary driver. A single reset at that point
+    # prevents the control/bulk-transfer storm that otherwise makes the first
+    # Monado launch fail. Never repeat it during the same physical session.
+    usb_primed=1
+    [[ "$prime_usb_before_start" == 1 ]] || return 0
+    [[ -x "$usb_reset_helper" ]] || return 0
+
+    echo "Priming the PSVR2 USB function before its first driver launch"
+    if ! "$usb_reset_helper"; then
+        echo "PSVR2 USB priming was unavailable; continuing with normal startup" >&2
+        return 0
+    fi
+
+    if ! headset_state_stable 1 \
+        "$((usb_prime_stability_checks * link_check_interval + 2))" \
+        "$usb_prime_stability_checks"; then
+        echo "PSVR2 did not settle after USB priming; deferring driver startup" >&2
+        return 1
+    fi
+}
+
 start_runtime() {
-    local attempt backoff stable_timeout delay failure_since
+    local attempt backoff failure_since
     backoff=$startup_retry_base
-    stable_timeout=$((link_stability_checks * link_check_interval))
 
     if has_runtime_cooldown; then
         next_retry=$((SECONDS + startup_retry_base))
         return 1
     fi
 
-    if ! headset_state_stable 1 "$stable_timeout" "$link_stability_checks"; then
-        echo "PSVR2 USB/DisplayPort link is not stable yet; retrying in ${backoff}s" >&2
+    # Every caller has already established a stable USB + DisplayPort link.
+    # Prime the newly connected USB session instead of repeating that wait.
+    if ! prime_usb_session; then
         next_retry=$((SECONDS + backoff))
         return 1
     fi
 
     for attempt in $(seq 1 "$startup_retry_attempts"); do
-        delay=$((2 * link_check_interval + 1))
         echo "PSVR2 startup attempt $attempt/$startup_retry_attempts"
-        sleep "$delay"
         if ! headset_connected; then
             next_retry=$((SECONDS + backoff))
             return 1
@@ -482,6 +508,7 @@ while true; do
                 next_retry=0
                 tracking_established=0
                 tracking_suspended=0
+                usb_primed=0
                 previous=$current
                 previous_controllers=$(connected_controller_count)
             fi
