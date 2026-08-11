@@ -75,3 +75,16 @@ index 6c8efcac1..38ac28a72 100644
 +
  	// Start drawing.
  	igBegin("Monado", NULL, 0);
+diff --git a/src/xrt/compositor/main/comp_renderer.c b/src/xrt/compositor/main/comp_renderer.c
+index 36c101862..6d5fc9f76 100644
+--- a/src/xrt/compositor/main/comp_renderer.c
++++ b/src/xrt/compositor/main/comp_renderer.c
+@@ -1190,7 +1190,7 @@ comp_renderer_draw(struct comp_renderer *r)
+ 		    frame_id,                  //
+ 		    predicted_display_time_ns, //
+ 		    rsci->image,               //
+-		    rsci->srgb_view,           //
++		    rsci->unorm_view,          // Preserve gamma-encoded bytes for the desktop mirror.
+ 		    clamp_to_edge,             //
+ 		    extent,                    //
+ 		    rect);                     //

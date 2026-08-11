@@ -54,6 +54,8 @@ grep -Fq 'systemctl --user start psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-st
 grep -Fq 'if is_monado_failed "$service_pid"; then' bin/psvr2-fossvr-start
 grep -Fq 'tracking_established=1' bin/psvr2-autostart-monitor
 grep -Fq 'tracking_established && ! tracking_suspended' bin/psvr2-autostart-monitor
+grep -Fq 'rsci->unorm_view,          // Preserve gamma-encoded bytes for the desktop mirror.' \
+  patches/monado-spectator-mirror.patch
 ! grep -Fq '"$helper_dir/psvr2-stop-games"' bin/psvr2-autostart-monitor
 ! grep -Fq 'systemctl --user stop psvr2-fossvr-wayvr.service psvr2-chaperone.service' bin/psvr2-autostart-monitor
 bash -n bin/psvr2-stop-games

@@ -192,7 +192,9 @@ it can create this set even on a factory-fresh installation.
 
 The fullscreen left-eye mirror is enabled by default and uses Monado's
 synchronized, pre-distortion compositor readback without desktop capture. It
-shows one complete eye with all active application and overlay layers. Confirm
+shows one complete eye with all active application and overlay layers. The
+readback preserves the compositor's gamma-encoded pixels so its brightness
+matches the in-headset view instead of applying the sRGB transfer twice. Confirm
 `PSVR2_SPECTATOR_ENABLE=1` in `~/.config/psvr2-linux/settings.env`, rebuild the
 pinned runtime with `./scripts/prepare-envision-runtime.sh` followed by
 `./scripts/build-envision-runtime.sh`, and restart the VR stack. The mirror is
