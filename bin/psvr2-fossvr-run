@@ -13,8 +13,11 @@ unset PSVR2_ROOM_SETUP_LAUNCH || true
 start_helper="${PSVR2_HELPER_DIR:-$HOME/.local/bin}/psvr2-fossvr-start"
 [[ -x "$start_helper" ]] || { echo "Required PSVR2 helper is missing or not executable: $start_helper" >&2; exit 1; }
 
-if ! systemctl --user is-active --quiet psvr2-fossvr.service ||
-   ! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service; then
+# WayVR is deliberately stopped while a VR title owns the compositor.  Its
+# absence therefore says nothing about Monado's health and must never trigger a
+# runtime restart during a handoff between games.  The EXIT cleanup below
+# restores WayVR once the final wrapped title has left its scope.
+if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
     "$start_helper"
 fi
 
