@@ -161,6 +161,11 @@ required.
 - If the headset enumerates but its USB endpoints fail during driver wake-up,
   the monitor performs one device-scoped USB port reset and retries without
   requiring root, unplugging the adapter, or resetting the surrounding hub.
+- If DisplayPort wakes before the adapter's USB function appears, the guarded
+  system recovery may cycle only the adapter-side hub. The system installer
+  authorizes that single safety-checked service for local sessions, including
+  the short login transition, so future headset starts never show an
+  administrator prompt.
 - A fullscreen, undistorted full-left-eye spectator view opens on the laptop display
   by default and closes with the runtime. Set `PSVR2_SPECTATOR_ENABLE=0` in
   `settings.env` for headset-only output.

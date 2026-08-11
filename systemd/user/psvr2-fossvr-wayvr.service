@@ -8,6 +8,9 @@ PartOf=psvr2-fossvr.service
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/psvr2-wayvr --openxr --replace
-Restart=always
-RestartSec=2
+# The connection monitor owns recovery.  If Monado fails, restarting this
+# Requires= client would implicitly start Monado again without the lifecycle
+# lock, preflight, device health check, or USB recovery.  That creates a
+# compositor/socket restart storm precisely while the headset is least ready.
+Restart=no
 TimeoutStopSec=5
