@@ -45,6 +45,7 @@ check grep -Fq 'psvr2-room-setup.service' "$repo/patches/wayvr-psvr2-dashboard.p
 check grep -Fq 'registered_nonsteam_vr_apps' "$repo/patches/wayvr-nonsteam-vr-library.patch"
 check grep -Fq 'FrontendTask::HideDashboard' "$repo/patches/wayvr-dismiss-dashboard-on-launch.patch"
 check grep -Fq 'SetDashboardVisible' "$repo/patches/wayvr-game-lifecycle-dashboard.patch"
+check grep -Fq 'PromoteManifest' "$repo/patches/wayvr-launch-recency.patch"
 check bash -c 'bash "$1"' _ "$repo/scripts/verify-haptics.sh"
 monado_service="$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
 if ! getcap "$monado_service" | grep -Fq 'cap_sys_nice=eip'; then

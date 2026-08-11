@@ -1,0 +1,78 @@
+diff --git a/dash-frontend/src/views/game_list.rs b/dash-frontend/src/views/game_list.rs
+--- a/dash-frontend/src/views/game_list.rs
++++ b/dash-frontend/src/views/game_list.rs
+@@ -28,6 +28,7 @@ enum Task {
+ 	AppManifestClicked(steam_utils::AppManifest),
+ 	SetCoverArt(AppID, Rc<CoverArt>),
+ 	LoadManifests,
++	PromoteManifest(AppID),
+ 	FillPage(u32),
+ 	PrevPage,
+ 	NextPage,
+@@ -76,6 +77,7 @@ impl ViewTrait for View {
+ 			for task in tasks {
+ 				match task {
+ 					Task::LoadManifests => self.load_manifests(),
++					Task::PromoteManifest(app_id) => self.promote_manifest(app_id),
+ 					Task::FillPage(page_idx) => self.fill_page(par.layout, par.executor, page_idx)?,
+ 					Task::AppManifestClicked(manifest) => self.action_app_manifest_clicked(manifest)?,
+ 					Task::SetCoverArt(app_id, cover_art) => self.set_cover_art(par.layout, app_id, cover_art),
+@@ -199,6 +201,16 @@ impl View {
+ 		}
+ 	}
+ 
++	fn promote_manifest(&mut self, app_id: AppID) {
++		let Some(index) = self.all_manifests.iter().position(|item| item.app_id == app_id) else {
++			return;
++		};
++		let manifest = self.all_manifests.remove(index);
++		self.all_manifests.insert(0, manifest);
++		self.cur_page = 0;
++		self.tasks.push(Task::FillPage(0));
++	}
++
+ 	fn page_prev(&mut self) {
+ 		if self.cur_page == 0 {
+ 			return;
+@@ -280,12 +292,17 @@ impl View {
+ 	}
+ 
+ 	fn action_app_manifest_clicked(&mut self, manifest: steam_utils::AppManifest) -> anyhow::Result<()> {
++		let launched_app_id = manifest.app_id.clone();
++		let tasks = self.tasks.clone();
+ 		views::game_launcher::mount_popup(
+ 			self.frontend_tasks.clone(),
+ 			self.executor.clone(),
+ 			self.globals.clone(),
+ 			manifest,
+ 			self.view_launcher.clone(),
++			Box::new(move || {
++				tasks.push(Task::PromoteManifest(launched_app_id));
++			}),
+ 		);
+ 
+ 		Ok(())
+diff --git a/dash-frontend/src/views/game_launcher.rs b/dash-frontend/src/views/game_launcher.rs
+--- a/dash-frontend/src/views/game_launcher.rs
++++ b/dash-frontend/src/views/game_launcher.rs
+@@ -205,6 +205,7 @@ pub fn mount_popup(
+ 	globals: WguiGlobals,
+ 	manifest: AppManifest,
+ 	popup: PopupHolder<View>,
++	on_game_launched: Box<dyn FnOnce()>,
+ ) {
+ 	frontend_tasks
+ 		.clone()
+@@ -212,7 +213,11 @@ pub fn mount_popup(
+ 			Translation::from_raw_text(&manifest.name),
+ 			Box::new(move |data| {
+-				let on_launched = popup.get_close_callback(data.layout);
++				let close_popup = popup.get_close_callback(data.layout);
++				let on_launched = Box::new(move || {
++					close_popup();
++					on_game_launched();
++				});
+ 				let view = View::new(Params {
+ 					manifest: manifest.clone(),
+ 					executor: executor.clone(),
+ 					globals: &globals,

@@ -114,6 +114,22 @@ jq -e '."341800" == true and ."1920760" == true and ."250820" == false and ."260
 expected_command="$test_home/.local/bin/psvr2-fossvr-run '$local_vr_launcher'"
 test "$(HOME="$test_home" python3 "$repo/bin/psvr2-launch-registered-vr" --check 2600304528)" = \
   "$expected_command"
+HOME="$test_home" REPO="$repo" python3 - <<'PY'
+import json
+import os
+import runpy
+import time
+from pathlib import Path
+
+registered_vr = runpy.run_path(
+    str(Path(os.environ["REPO"]) / "bin/psvr2-launch-registered-vr")
+)
+started = int(time.time())
+registered_vr["mark_last_played"]("2600304528")
+manifest = Path.home() / "Steam/config/steamapps.vrmanifest"
+entry = json.loads(manifest.read_text())["applications"][0]
+assert int(entry["last_played_time"]) >= started, entry
+PY
 grep -Fq "$test_home/.local/bin/psvr2-fossvr-run %command%" \
   "$steam/userdata/1/config/localconfig.vdf"
 grep -Fq "$test_home/.local/bin/psvr2-fossvr-run %command%" \
