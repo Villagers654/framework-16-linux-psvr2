@@ -35,7 +35,9 @@ if [[ ! -S "$socket" ]] || ! ss -H -xl | grep -Fq "$socket"; then
 fi
 
 export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
-export VR_OVERRIDE="$ENVISION_PROFILE_ROOT/riftlift/components/xrizer/target/release"
+# Respect an application-owned OpenVR runtime (RiftLift pins its own build),
+# while retaining the toolkit's XRizer as the generic Steam/OpenVR fallback.
+export VR_OVERRIDE="${VR_OVERRIDE:-$ENVISION_PROFILE_ROOT/riftlift/components/xrizer/target/release}"
 export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
 export OXR_ZERO_TIME_IS_NOW=1
 # Present parallel application views on canted-display headsets such as PSVR2.
