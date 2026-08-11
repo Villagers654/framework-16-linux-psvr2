@@ -1,0 +1,99 @@
+diff --git a/wayvr/src/assets/gui/watch.xml b/wayvr/src/assets/gui/watch.xml
+index 1fb2f2af..07e9e1d9 100644
+--- a/wayvr/src/assets/gui/watch.xml
++++ b/wayvr/src/assets/gui/watch.xml
+@@ -140,6 +140,28 @@
+           </div>
+         </rectangle>
+ 
++        <!-- System volume controls remain global even when a VR app has keyboard focus. -->
++        <rectangle macro="decorative_rect" flex_direction="row" gap="8" justify_content="center">
++          <Button macro="button_style"
++            _press="::SendGlobalKey XF86AudioLowerVolume down"
++            _release="::SendGlobalKey XF86AudioLowerVolume up"
++            tooltip_str="Volume down" tooltip_side="top">
++            <sprite width="36" height="36" src_builtin="watch/volume-down.svg" />
++          </Button>
++          <Button macro="button_style"
++            _press="::SendGlobalKey XF86AudioMute down"
++            _release="::SendGlobalKey XF86AudioMute up"
++            tooltip_str="Mute" tooltip_side="top">
++            <sprite width="36" height="36" src_builtin="watch/volume-mute.svg" />
++          </Button>
++          <Button macro="button_style"
++            _press="::SendGlobalKey XF86AudioRaiseVolume down"
++            _release="::SendGlobalKey XF86AudioRaiseVolume up"
++            tooltip_str="Volume up" tooltip_side="top">
++            <sprite width="36" height="36" src_builtin="watch/volume-up.svg" />
++          </Button>
++        </rectangle>
++
+         <!-- Bottom buttons -->
+         <div flex_direction="row" gap="8">
+           <div gap="4">
+diff --git a/wayvr/src/assets/watch/volume-down.svg b/wayvr/src/assets/watch/volume-down.svg
+new file mode 100644
+index 00000000..6f175138
+--- /dev/null
++++ b/wayvr/src/assets/watch/volume-down.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icons derived from Material Symbols by Google - Apache-2.0 --><path fill="currentColor" d="M3 10v4h3l4 4V6l-4 4zm11 1v2h7v-2z"/></svg>
+diff --git a/wayvr/src/assets/watch/volume-mute.svg b/wayvr/src/assets/watch/volume-mute.svg
+new file mode 100644
+index 00000000..97ed0ac6
+--- /dev/null
++++ b/wayvr/src/assets/watch/volume-mute.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icons derived from Material Symbols by Google - Apache-2.0 --><path fill="currentColor" d="M3 10v4h3l4 4V6l-4 4zm10.5-1.5L15 10l1.5-1.5L18 10l1.5-1.5L21 10l-1.5 1.5L21 13l-1.5 1.5L18 13l-1.5 1.5L15 13l-1.5 1.5L12 13l1.5-1.5L12 10z"/></svg>
+diff --git a/wayvr/src/assets/watch/volume-up.svg b/wayvr/src/assets/watch/volume-up.svg
+new file mode 100644
+index 00000000..64205987
+--- /dev/null
++++ b/wayvr/src/assets/watch/volume-up.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><!-- Icons derived from Material Symbols by Google - Apache-2.0 --><path fill="currentColor" d="M3 10v4h3l4 4V6l-4 4zm14 1V8h2v3h3v2h-3v3h-2v-3h-3v-2z"/></svg>
+diff --git a/wayvr/src/gui/panel/button.rs b/wayvr/src/gui/panel/button.rs
+index 840a0c82..9221b99b 100644
+--- a/wayvr/src/gui/panel/button.rs
++++ b/wayvr/src/gui/panel/button.rs
+@@ -680,6 +680,40 @@ pub(super) fn setup_custom_button<S: 'static>(
+                         Ok(EventResult::Consumed)
+                     })
+                 }
++                "::SendGlobalKey" => {
++                    let Some(arg) = args.next() else {
++                        log_cmd_missing_arg(parser_state, TAG, name, command);
++                        return;
++                    };
++                    let Ok(key) = VirtualKey::from_str(arg) else {
++                        let msg = format!("expected VirtualKey, found \"{arg}\"");
++                        log_cmd_invalid_arg(parser_state, TAG, name, command, &msg);
++                        return;
++                    };
++                    let Some(arg) = args.next() else {
++                        log_cmd_missing_arg(parser_state, TAG, name, command);
++                        return;
++                    };
++                    let down = match arg.to_lowercase().as_str() {
++                        "down" => true,
++                        "up" => false,
++                        _ => {
++                            let msg = format!("expected \"down\" or \"up\", found \"{arg}\"");
++                            log_cmd_invalid_arg(parser_state, TAG, name, command, &msg);
++                            return;
++                        }
++                    };
++                    Box::new(move |_common, data, app, _| {
++                        if !test_button(data) || !test_duration(&button, app) {
++                            return Ok(EventResult::Pass);
++                        }
++
++                        // Media controls must reach the desktop even while a WayVR
++                        // window owns keyboard focus.
++                        app.hid_provider.inner.send_key(key, down);
++                        Ok(EventResult::Consumed)
++                    })
++                }
+                 "::ShellExec" => {
+                     let state = Rc::new(ShellButtonState {
+                         button: button.clone(),

@@ -22,6 +22,7 @@ patches=(
   "$repo/patches/wayvr-dismiss-dashboard-on-launch.patch"
   "$repo/patches/wayvr-game-lifecycle-dashboard.patch"
   "$repo/patches/wayvr-launch-recency.patch"
+  "$repo/patches/wayvr-watch-volume-controls.patch"
 )
 
 # Normalize only changes owned by this repository. Reverse in dependency order
