@@ -54,7 +54,8 @@ output=$(PATH="$test_root/bin:$PATH" \
     timeout 5 "$repo/bin/psvr2-fossvr-stop")
 
 grep -Fq 'PSVR2 runtime stopped.' <<<"$output"
-grep -Fxq -- '--no-block stop psvr2-dgpu-power.service' "$test_root/systemctl.log"
+grep -Fxq -- '--no-ask-password --no-block stop psvr2-dgpu-power.service' \
+    "$test_root/systemctl.log"
 for artifact in wayvr.pid wayvr.disp monado_comp_ipc; do
     if [[ -e "$test_root/runtime/$artifact" || -S "$test_root/runtime/$artifact" ]]; then
         echo "Disconnect teardown left stale runtime artifact: $artifact" >&2

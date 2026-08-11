@@ -49,7 +49,7 @@ fi
 systemctl --user stop psvr2-fossvr.service || true
 # Release the Framework dGPU's forced VR profile on USB or DisplayPort
 # disconnect. The USB-add udev event re-enables it on the next connection.
-systemctl --no-block stop psvr2-dgpu-power.service 2>/dev/null || true
+systemctl --no-ask-password --no-block stop psvr2-dgpu-power.service 2>/dev/null || true
 # Service shutdown can leave dead IPC and PID/display markers behind. Remove
 # them only after every producer is stopped so the next connection cannot
 # mistake stale state for a live compositor or dashboard.

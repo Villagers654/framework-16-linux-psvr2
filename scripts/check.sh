@@ -44,7 +44,9 @@ grep -Fq 'export OXR_NO_TEXTURE_SOURCE_ALPHA=1' bin/psvr2-fossvr-run
 grep -Fq '! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
 grep -Fq 'game_stop_helper="$helper_dir/psvr2-stop-games"' bin/psvr2-fossvr-stop
 grep -Fq '"$lock_dir/monado_comp_ipc"' bin/psvr2-fossvr-stop
-grep -Fq 'systemctl --no-block stop psvr2-dgpu-power.service' bin/psvr2-fossvr-stop
+grep -Fq 'systemctl --no-ask-password --no-block stop psvr2-dgpu-power.service' bin/psvr2-fossvr-stop
+grep -Fq 'unit == "psvr2-dgpu-power.service" && verb == "stop"' \
+  polkit/49-psvr2-usb-recover.rules
 grep -Fq 'ENV{PRODUCT}=="54c/cde/*"' udev/71-psvr2-dgpu-power.rules
 grep -Fq '"$usb_reset_helper"' bin/psvr2-autostart-monitor
 grep -Fq 'psvr2-usb-recover.service' bin/psvr2-autostart-monitor
