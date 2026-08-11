@@ -75,7 +75,7 @@ if ! git -C "$riftlift_source" diff --quiet || ! git -C "$riftlift_source" diff 
 fi
 git -C "$riftlift_source" remote set-url origin https://github.com/Villagers654/RiftLift
 git -C "$riftlift_source" fetch origin main
-git -C "$riftlift_source" checkout --detach 0f843fd94aa6507cd53f440fa099dfc1f1ab2bcd
+git -C "$riftlift_source" checkout --detach 290a91bb57cd05f3c56f05a25f1ac48164a5b579
 git -C "$riftlift_source" submodule update --init --recursive
 git -C "$riftlift_source" diff --check
 [[ -f "$riftlift_source/components/xrizer/Cargo.toml" ]] || {
