@@ -1,0 +1,72 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+usb_root=${PSVR2_USB_ROOT:-/sys/bus/usb/devices}
+drm_root=${PSVR2_DRM_ROOT:-/sys/class/drm}
+device_root=${PSVR2_USB_DEVICE_ROOT:-/sys/devices}
+device_root=$(readlink -f -- "$device_root")
+
+psvr2_display_present() {
+    local connector
+    for connector in "$drm_root"/card*-*; do
+        [[ -r "$connector/status" && -r "$connector/edid" ]] || continue
+        [[ "$(<"$connector/status")" == connected ]] || continue
+        LC_ALL=C grep -aFq 'PS VR2' "$connector/edid" 2>/dev/null && return 0
+    done
+    return 1
+}
+
+psvr2_usb_present() {
+    local candidate
+    for candidate in "$usb_root"/*; do
+        [[ -r "$candidate/idVendor" && -r "$candidate/idProduct" ]] || continue
+        [[ "$(<"$candidate/idVendor"):$(<"$candidate/idProduct")" == 054c:0cde ]] && return 0
+    done
+    return 1
+}
+
+psvr2_display_present || {
+    echo 'Refusing PSVR2 USB recovery without a connected PS VR2 display' >&2
+    exit 1
+}
+
+if psvr2_usb_present; then
+    echo 'PSVR2 USB is already enumerated; no adapter-hub recovery is needed.'
+    exit 0
+fi
+
+hubs=()
+for candidate in "$usb_root"/*; do
+    [[ -r "$candidate/idVendor" && -r "$candidate/idProduct" ]] || continue
+    [[ "$(<"$candidate/idVendor"):$(<"$candidate/idProduct")" == 05e3:0625 ]] || continue
+    resolved=$(readlink -f -- "$candidate")
+    [[ "$resolved" == "$device_root"/* && -w "$resolved/authorized" ]] || continue
+
+    # Require the adapter hub to be directly below an AMD xHCI controller.
+    controller=$(dirname -- "$(dirname -- "$resolved")")
+    [[ -r "$controller/vendor" && -r "$controller/class" ]] || continue
+    [[ "$(<"$controller/vendor")" == 0x1022 ]] || continue
+    [[ "$(<"$controller/class")" == 0x0c03* ]] || continue
+    hubs+=("$resolved")
+done
+
+(( ${#hubs[@]} == 1 )) || {
+    echo "Expected exactly one PSVR2 adapter-side USB3 hub, found ${#hubs[@]}" >&2
+    exit 1
+}
+
+hub=${hubs[0]}
+printf '0' > "$hub/authorized"
+sleep 2
+printf '1' > "$hub/authorized"
+
+for _ in $(seq 1 10); do
+    if psvr2_usb_present; then
+        echo 'Recovered the missing PSVR2 USB function through its adapter hub.'
+        exit 0
+    fi
+    sleep 0.5
+done
+
+echo 'The adapter hub reset completed, but PSVR2 USB did not enumerate.' >&2
+exit 1

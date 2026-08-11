@@ -236,9 +236,9 @@ fi
 [[ ${EUID} -eq 0 ]] || { echo "Run --system with sudo." >&2; exit 1; }
 install -m 0644 "$repo_dir/udev/70-psvr2.rules" /etc/udev/rules.d/70-psvr2.rules
 install -d -m 0755 /usr/local/libexec
-rm -f -- /etc/systemd/system/psvr2-usb-recover.service \
-    /etc/polkit-1/rules.d/49-psvr2-usb-recover.rules \
-    /usr/local/libexec/psvr2-usb-recover
+install -m 0755 "$repo_dir/systemd/system/psvr2-usb-recover" /usr/local/libexec/
+install -m 0644 "$repo_dir/systemd/system/psvr2-usb-recover.service" /etc/systemd/system/
+install -m 0644 "$repo_dir/polkit/49-psvr2-usb-recover.rules" /etc/polkit-1/rules.d/
 if $framework; then
     mapfile -t dgpus < <(lspci -Dn | awk '$3 == "1002:7480" {
         address=$1

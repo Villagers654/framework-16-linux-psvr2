@@ -47,6 +47,7 @@ grep -Fq '"$lock_dir/monado_comp_ipc"' bin/psvr2-fossvr-stop
 grep -Fq 'systemctl --no-block stop psvr2-dgpu-power.service' bin/psvr2-fossvr-stop
 grep -Fq 'ENV{PRODUCT}=="54c/cde/*"' udev/71-psvr2-dgpu-power.rules
 grep -Fq '"$usb_reset_helper"' bin/psvr2-autostart-monitor
+grep -Fq 'psvr2-usb-recover.service' bin/psvr2-autostart-monitor
 grep -Fq 'PSVR2_AUTOMATED_STOP=1 "$stop_helper"' bin/psvr2-autostart-monitor
 ! grep -Fq 'wait_for_psvr2_tracking' bin/psvr2-fossvr-start
 grep -Fq 'systemctl --user start psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-start
@@ -144,10 +145,16 @@ if command -v systemd-analyze >/dev/null 2>&1; then
       "$verify_root/usr/lib/systemd/system/$unit"
   done
   systemd-analyze verify --root="$verify_root" psvr2-dgpu-power.service
+  install -Dm0755 systemd/system/psvr2-usb-recover \
+    "$verify_root/usr/local/libexec/psvr2-usb-recover"
+  install -Dm0644 systemd/system/psvr2-usb-recover.service \
+    "$verify_root/etc/systemd/system/psvr2-usb-recover.service"
+  systemd-analyze verify --root="$verify_root" psvr2-usb-recover.service
 fi
 
 ./scripts/verify-reconnect-cycle.sh
 ./scripts/test-disconnect-stop.sh
+./scripts/test-missing-usb-recovery.sh
 ./scripts/test-steam-sync.sh
 ./scripts/test-stop-games.sh
 echo "Repository checks passed."

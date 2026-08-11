@@ -1,0 +1,8 @@
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "psvr2-usb-recover.service" &&
+        action.lookup("verb") == "start" &&
+        subject.active && subject.local) {
+        return polkit.Result.YES;
+    }
+});

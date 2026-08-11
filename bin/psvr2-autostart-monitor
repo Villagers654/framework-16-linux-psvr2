@@ -19,6 +19,7 @@ runtime_failure_streak_threshold=${PSVR2_RUNTIME_FAILURE_STREAK_THRESHOLD:-2}
 runtime_recovery_cooldown=${PSVR2_RUNTIME_FAILURE_RECOVERY_SECONDS:-90}
 runtime_retry_cooldown=${PSVR2_RUNTIME_RETRY_COOLDOWN_SECONDS:-$runtime_recovery_cooldown}
 usb_recovery_cooldown=${PSVR2_USB_RECOVERY_COOLDOWN_SECONDS:-8}
+missing_usb_recovery_cooldown=${PSVR2_MISSING_USB_RECOVERY_SECONDS:-15}
 tracking_loss_checks=${PSVR2_TRACKING_LOSS_CHECKS:-3}
 tracking_recovery_checks=${PSVR2_TRACKING_RECOVERY_CHECKS:-3}
 required_usb_interfaces=${PSVR2_USB_INTERFACE_MINIMUM:-11}
@@ -39,6 +40,7 @@ tracking_bad_checks=0
 tracking_good_checks=0
 tracking_suspended=0
 tracking_established=0
+next_missing_usb_recovery=0
 
 load_runtime_failure_state() {
     if [[ -r "$runtime_failure_state_file" ]]; then
@@ -71,15 +73,7 @@ for helper in "$start_helper" "$stop_helper"; do
     fi
 done
 
-headset_connected() {
-    if [[ -n "$connection_state_file" && -r "$connection_state_file" ]]; then
-        case "$(tr -d '[:space:]' < "$connection_state_file")" in
-            connected) return 0 ;;
-            disconnected) return 1 ;;
-            *) return 1 ;;
-        esac
-    fi
-
+psvr2_usb_ready() {
     # The adapter exposes a 12 Mbps USB control function even when the HMD is
     # powered off. Starting Sony's driver in that state makes it address the
     # unavailable camera interfaces and can wedge the AMD xHCI controller.
@@ -99,6 +93,9 @@ headset_connected() {
         fi
     done
     (( superspeed_ready )) || return 1
+}
+
+psvr2_display_connected() {
     local connector
     for connector in "$drm_root"/card*-*; do
         [[ -r "$connector/status" && -r "$connector/edid" ]] || continue
@@ -106,6 +103,18 @@ headset_connected() {
         LC_ALL=C grep -aFq 'PS VR2' "$connector/edid" 2>/dev/null && return 0
     done
     return 1
+}
+
+headset_connected() {
+    if [[ -n "$connection_state_file" && -r "$connection_state_file" ]]; then
+        case "$(tr -d '[:space:]' < "$connection_state_file")" in
+            connected) return 0 ;;
+            disconnected) return 1 ;;
+            *) return 1 ;;
+        esac
+    fi
+
+    psvr2_usb_ready && psvr2_display_connected
 }
 
 headset_state_stable() {
@@ -437,6 +446,15 @@ previous_controllers=$(connected_controller_count)
 
 while true; do
     if headset_connected; then current=connected; else current=disconnected; fi
+    if [[ -z "$connection_state_file" ]] \
+        && [[ "$current" == disconnected ]] \
+        && psvr2_display_connected \
+        && ! psvr2_usb_ready \
+        && (( SECONDS >= next_missing_usb_recovery )); then
+        echo 'PSVR2 DisplayPort is connected but USB is missing; requesting guarded adapter-hub recovery'
+        timeout 3 systemctl --no-ask-password --no-block start psvr2-usb-recover.service 2>/dev/null || true
+        next_missing_usb_recovery=$((SECONDS + missing_usb_recovery_cooldown))
+    fi
     if [[ "$current" != "$previous" ]]; then
         if [[ "$current" == connected ]]; then
             echo "PSVR2 USB and DisplayPort connected; validating stable link"
