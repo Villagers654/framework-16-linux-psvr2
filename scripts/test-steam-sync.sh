@@ -116,7 +116,7 @@ test "$(HOME="$test_home" python3 "$repo/bin/psvr2-launch-registered-vr" --check
   "$expected_command"
 grep -Fq "$test_home/.local/bin/psvr2-fossvr-run %command%" \
   "$steam/userdata/1/config/localconfig.vdf"
-grep -Fq "$test_home/.local/bin/psvr2-fossvr-run $test_home/.local/bin/riftlift launch-steam 1920760 -- %command%" \
+grep -Fq "$test_home/.local/bin/psvr2-fossvr-run %command%" \
   "$steam/userdata/1/config/localconfig.vdf"
 grep -Fq '"name"		"proton_experimental"' "$steam/config/config.vdf"
 test -f "$steam/userdata/1/config/localconfig.vdf.psvr2-auto-backup"

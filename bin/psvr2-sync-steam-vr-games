@@ -183,8 +183,6 @@ def riftlift_steam_ids() -> set[str]:
 
 
 def desired_launch(appid: str) -> str:
-    if appid in RIFTLIFT_STEAM_IDS:
-        return f"{WRAPPER} {RIFTLIFT} launch-steam {appid} -- %command%"
     suffix = VR_FLAGS.get(appid, "")
     return f"{WRAPPER} %command%" + (f" {suffix}" if suffix else "")
 
