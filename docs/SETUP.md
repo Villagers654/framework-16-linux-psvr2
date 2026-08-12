@@ -103,7 +103,24 @@ psvr2-chaperone configure
 ```
 
 That writes `~/.config/xr-chaperone/chaperone.toml` and captures your room
-polygon for warning visual geometry and fade behavior.
+polygon. During play, only the section nearest the HMD or either tracked Sense
+controller fades in. It becomes more opaque on approach and transitions from
+cyan to red over the final safety margin. Invalid or disconnected controller
+poses are ignored.
+
+The generated defaults can be tuned without retracing the room:
+
+```toml
+fade_start = 0.45       # first warning distance, metres
+local_radius = 0.8      # length of the localized warning patch
+danger_distance = 0.12 # red-warning margin
+```
+
+Automatic camera passthrough outside the polygon is not enabled yet. The PSVR2
+Toolkit exposes its camera to Sony's Room Setup flow, but the current Monado
+runtime does not expose that feed to arbitrary OpenXR overlays as passthrough.
+The boundary remains fully red outside the polygon rather than launching or
+replacing the active VR application with an unsafe camera workaround.
 
 The overlay is started automatically from `psvr2-fossvr-start` and `psvr2-room-setup`
 to keep your existing room setup flow unchanged.

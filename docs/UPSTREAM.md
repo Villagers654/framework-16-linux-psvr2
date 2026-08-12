@@ -15,7 +15,8 @@
 - [WayVR](https://github.com/wayvr-org/wayvr) — in-headset launcher, desktop,
   and dashboard.
 - [xr-chaperone](https://github.com/FrostyCoolSlug/xr-chaperone) — optional
-  OpenXR visual boundary overlay (warning wall and fade).
+  OpenXR visual boundary overlay, patched locally for PS Sense bindings,
+  per-device localized proximity fade, and a red danger transition.
 - [xr-hardware](https://github.com/CollaboraLtd/udev-hmd) — canonical udev IDs.
 
 This repository's original scripts and documentation are MIT licensed. Patches

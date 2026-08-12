@@ -1,0 +1,79 @@
+diff --git a/shaders/chaperone.frag b/shaders/chaperone.frag
+index 814e8e5..68787dd 100644
+--- a/shaders/chaperone.frag
++++ b/shaders/chaperone.frag
+@@ -12,5 +12,5 @@ layout(push_constant) uniform PushConstants {
+     // guaranteed 128-byte push-constant budget.
+     vec4 devices[3];
+-    // line_width, grid_spacing, danger factor, reserved
++    // line_width, grid_spacing, danger factor, packed RGBA colour
+     vec4 params;
+ } pc;
+@@ -46,7 +46,7 @@ void main() {
+ 
+     float danger = pc.params.z;
+-    vec3 safe_colour = vec3(0.0, 0.6, 1.0);
++    vec4 safe_colour = unpackUnorm4x8(floatBitsToUint(pc.params.w));
+     vec3 danger_colour = vec3(1.0, 0.08, 0.03);
+-    vec3 colour = mix(safe_colour, danger_colour, danger);
+-    out_colour = vec4(colour, on_line * opacity);
++    vec3 colour = mix(safe_colour.rgb, danger_colour, danger);
++    out_colour = vec4(colour, on_line * opacity * safe_colour.a);
+ }
+diff --git a/src/renderer.rs b/src/renderer.rs
+index 13986e2..9e09113 100644
+--- a/src/renderer.rs
++++ b/src/renderer.rs
+@@ -13,4 +13,14 @@ struct PushConstants {
+     params: [f32; 4],
+ }
+ 
++fn pack_colour(colour: [f32; 4]) -> f32 {
++    let packed = colour
++        .into_iter()
++        .enumerate()
++        .fold(0_u32, |bits, (index, channel)| {
++            bits | ((channel.clamp(0.0, 1.0) * 255.0).round() as u32) << (index * 8)
++        });
++    f32::from_bits(packed)
++}
++
+ unsafe fn create_shader_module(device: &ash::Device, spirv: &[u8]) -> Result<vk::ShaderModule> {
+@@ -390,4 +400,5 @@ impl ChaperoneRenderer {
+         extent: vk::Extent2D,
+         view_proj: Mat4,
+         devices: [[f32; 4]; 3],
++        colour: [f32; 4],
+         line_width: f32,
+@@ -438,5 +449,5 @@ impl ChaperoneRenderer {
+         let pc = PushConstants {
+             view_proj: view_proj.to_cols_array_2d(),
+             devices,
+-            params: [line_width, grid_spacing, danger, 0.0],
++            params: [line_width, grid_spacing, danger, pack_colour(colour)],
+         };
+@@ -468,4 +479,14 @@ impl ChaperoneRenderer {
+     }
+ }
+ 
++#[cfg(test)]
++mod tests {
++    use super::pack_colour;
++
++    #[test]
++    fn colour_is_packed_as_shader_rgba_unorm() {
++        assert_eq!(pack_colour([0.0, 0.6, 1.0, 1.0]).to_bits(), 0xffff9900);
++    }
++}
++
+ impl Drop for ChaperoneRenderer {
+diff --git a/src/xr_thread.rs b/src/xr_thread.rs
+index f777346..89c272a 100644
+--- a/src/xr_thread.rs
++++ b/src/xr_thread.rs
+@@ -390,4 +390,5 @@ fn xr_main(state: Arc<Mutex<AppState>>, mut cfg: Config) -> Result<()> {
+                             eye_sc.extent,
+                             mvp,
+                             devices,
++                            cfg.grid_colour,
+                             cfg.line_width,

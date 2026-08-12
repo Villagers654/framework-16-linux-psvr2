@@ -1,0 +1,374 @@
+diff --git a/shaders/chaperone.frag b/shaders/chaperone.frag
+index 3b55bb1..814e8e5 100644
+--- a/shaders/chaperone.frag
++++ b/shaders/chaperone.frag
+@@ -2,16 +2,19 @@
+ 
+ layout(location = 0) in float in_wall_u;
+ layout(location = 1) in float in_wall_v;
++layout(location = 2) in vec3 in_world_position;
+ 
+ layout(location = 0) out vec4 out_colour;
+ 
+ // This should match the structure in renderer.rs
+ layout(push_constant) uniform PushConstants {
+     mat4  view_proj;
+-    vec4  colour;
+-    float opacity;
+-    float line_width;
+-    float grid_spacing;
++    // xyz is a tracked device position. The w components carry fade_start,
++    // fade_end, and local_radius respectively to stay within Vulkan's
++    // guaranteed 128-byte push-constant budget.
++    vec4 devices[3];
++    // line_width, grid_spacing, danger factor, reserved
++    vec4 params;
+ } pc;
+ 
+ // Returns 1.0 within line_width/2 of a grid line, 0.0 elsewhere.
+@@ -23,13 +26,31 @@ float grid_line(float uv, float grid_spacing, float half_width) {
+ }
+ 
+ void main() {
+-    float half_width = (pc.line_width * 0.5) / pc.grid_spacing;
+-    float horiz   = grid_line(in_wall_v, pc.grid_spacing, half_width);
+-    float vert    = grid_line(in_wall_u, pc.grid_spacing, half_width);
++    float line_width = pc.params.x;
++    float grid_spacing = pc.params.y;
++    float fade_start = pc.devices[0].w;
++    float fade_end = pc.devices[1].w;
++    float local_radius = pc.devices[2].w;
++    float half_width = (line_width * 0.5) / grid_spacing;
++    float horiz   = grid_line(in_wall_v, grid_spacing, half_width);
++    float vert    = grid_line(in_wall_u, grid_spacing, half_width);
+     float on_line = max(horiz, vert);
+ 
+     if (on_line < 0.01) discard;
+ 
+-    float alpha = on_line * pc.opacity * pc.colour.a;
+-    out_colour  = vec4(pc.colour.rgb, alpha);
++    float closest = 1e20;
++    for (int i = 0; i < 3; ++i) {
++        closest = min(closest, distance(in_world_position.xz, pc.devices[i].xz));
++    }
++
++    float proximity = 1.0 - smoothstep(fade_end, fade_start, closest);
++    float local_falloff = 1.0 - smoothstep(local_radius * 0.35, local_radius, closest);
++    float opacity = proximity * local_falloff;
++    if (opacity < 0.001) discard;
++
++    float danger = pc.params.z;
++    vec3 safe_colour = vec3(0.0, 0.6, 1.0);
++    vec3 danger_colour = vec3(1.0, 0.08, 0.03);
++    vec3 colour = mix(safe_colour, danger_colour, danger);
++    out_colour = vec4(colour, on_line * opacity);
+ }
+diff --git a/shaders/chaperone.vert b/shaders/chaperone.vert
+index 1df5f63..ac827c6 100644
+--- a/shaders/chaperone.vert
++++ b/shaders/chaperone.vert
+@@ -8,14 +8,18 @@ layout(location = 2) in float in_wall_v;
+ // Outputs to fragment shader
+ layout(location = 0) out float out_wall_u;
+ layout(location = 1) out float out_wall_v;
++layout(location = 2) out vec3 out_world_position;
+ 
+ // Push constant: combined view-projection matrix for one eye
+ layout(push_constant) uniform PushConstants {
+     mat4 view_proj;
++    vec4 devices[3];
++    vec4 params;
+ } pc;
+ 
+ void main() {
+     gl_Position  = pc.view_proj * vec4(in_position, 1.0);
+     out_wall_u   = in_wall_u;
+     out_wall_v   = in_wall_v;
++    out_world_position = in_position;
+ }
+diff --git a/src/boundary.rs b/src/boundary.rs
+index e986fe0..ca35c0e 100644
+--- a/src/boundary.rs
++++ b/src/boundary.rs
+@@ -35,11 +35,7 @@ pub fn signed_distance_to_polygon(polygon: &[Vec2], p: Vec2) -> f32 {
+ 
+     // Point-in-polygon (ray casting) to determine sign
+     let inside = point_in_polygon(polygon, p);
+-    if inside {
+-        min_dist
+-    } else {
+-        -min_dist
+-    }
++    if inside { min_dist } else { -min_dist }
+ }
+ 
+ /// Ray-casting point-in-polygon test.
+@@ -85,4 +81,65 @@ pub fn max_visibility(polygon: &[Vec2], positions: &[Vec3], fade_start: f32, fad
+         .iter()
+         .map(|&p| visibility_factor(polygon, p, fade_start, fade_end))
+         .fold(0.0_f32, f32::max)
+-}
+\ No newline at end of file
++}
++
++/// Red-warning strength for the closest tracked pose. Crossing the polygon is
++/// always full danger; inside the area it ramps over `danger_distance`.
++pub fn danger_factor(polygon: &[Vec2], positions: &[Vec3], danger_distance: f32) -> f32 {
++    let distance = positions
++        .iter()
++        .map(|&p| signed_distance_to_polygon(polygon, xz(p)))
++        .fold(f32::INFINITY, f32::min);
++    if distance <= 0.0 {
++        1.0
++    } else if distance >= danger_distance || danger_distance <= 0.0 {
++        0.0
++    } else {
++        1.0 - distance / danger_distance
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn square() -> Vec<Vec2> {
++        vec![
++            Vec2::new(-1.0, -1.0),
++            Vec2::new(1.0, -1.0),
++            Vec2::new(1.0, 1.0),
++            Vec2::new(-1.0, 1.0),
++        ]
++    }
++
++    #[test]
++    fn visibility_increases_toward_and_beyond_boundary() {
++        let polygon = square();
++        assert_eq!(visibility_factor(&polygon, Vec3::ZERO, 0.5, 0.0), 0.0);
++        assert!(
++            (visibility_factor(&polygon, Vec3::new(0.75, 0.0, 0.0), 0.5, 0.0) - 0.5).abs() < 1e-5
++        );
++        assert_eq!(
++            visibility_factor(&polygon, Vec3::new(1.1, 0.0, 0.0), 0.5, 0.0),
++            1.0
++        );
++    }
++
++    #[test]
++    fn closest_tracked_device_controls_visibility() {
++        let polygon = square();
++        let devices = [Vec3::ZERO, Vec3::new(0.9, 0.0, 0.0)];
++        assert!((max_visibility(&polygon, &devices, 0.5, 0.0) - 0.8).abs() < 1e-5);
++    }
++
++    #[test]
++    fn danger_turns_red_near_and_outside_edge() {
++        let polygon = square();
++        assert_eq!(danger_factor(&polygon, &[Vec3::ZERO], 0.2), 0.0);
++        assert!((danger_factor(&polygon, &[Vec3::new(0.9, 0.0, 0.0)], 0.2) - 0.5).abs() < 1e-5);
++        assert_eq!(
++            danger_factor(&polygon, &[Vec3::new(1.1, 0.0, 0.0)], 0.2),
++            1.0
++        );
++    }
++}
+diff --git a/src/config.rs b/src/config.rs
+index e798fe4..24ae9b3 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -167,6 +167,14 @@ pub struct Config {
+     #[serde(default = "default_grid_colour")]
+     pub grid_colour: [f32; 4],
+ 
++    /// Radius along the wall affected by a nearby tracked device.
++    #[serde(default = "default_local_radius")]
++    pub local_radius: f32,
++
++    /// Distance at which the warning begins transitioning to red.
++    #[serde(default = "default_danger_distance")]
++    pub danger_distance: f32,
++
+     /// The play area boundary points, must have at least 3 to render
+     #[serde(default)]
+     pub boundary: Vec<BoundaryPoint>,
+@@ -193,6 +201,12 @@ fn default_line_width() -> f32 {
+ fn default_grid_colour() -> [f32; 4] {
+     [0.0, 0.6, 1.0, 1.0]
+ }
++fn default_local_radius() -> f32 {
++    0.8
++}
++fn default_danger_distance() -> f32 {
++    0.12
++}
+ 
+ impl Config {
+     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+@@ -228,6 +242,8 @@ impl Config {
+             warn!("Fade End greater than Fade Start, fixing..");
+             self.fade_end = self.fade_start;
+         }
++        self.local_radius = self.local_radius.max(0.05);
++        self.danger_distance = self.danger_distance.clamp(0.0, self.fade_start);
+         Ok(())
+     }
+ }
+@@ -241,6 +257,8 @@ impl Default for Config {
+             grid_spacing: default_grid_spacing(),
+             line_width: default_line_width(),
+             grid_colour: default_grid_colour(),
++            local_radius: default_local_radius(),
++            danger_distance: default_danger_distance(),
+             headset_offset: None,
+         }
+     }
+diff --git a/src/mesh.rs b/src/mesh.rs
+index 5927ead..be0b3a9 100644
+--- a/src/mesh.rs
++++ b/src/mesh.rs
+@@ -84,3 +84,26 @@ pub fn build_mesh(polygon: &[Vec2], wall_height: f32, grid_spacing: f32) -> Chap
+     }
+     ChaperoneMesh { vertices, indices }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn generated_vertices_preserve_world_positions_for_local_fade() {
++        let polygon = [
++            Vec2::new(-1.0, -1.0),
++            Vec2::new(1.0, -1.0),
++            Vec2::new(1.0, 1.0),
++            Vec2::new(-1.0, 1.0),
++        ];
++        let mesh = build_mesh(&polygon, 2.0, 0.5);
++        assert!(!mesh.vertices.is_empty());
++        assert!(
++            mesh.vertices
++                .iter()
++                .any(|v| v.position == [-1.0, 0.0, -1.0])
++        );
++        assert!(mesh.vertices.iter().any(|v| v.position == [1.0, 2.0, 1.0]));
++    }
++}
+diff --git a/src/renderer.rs b/src/renderer.rs
+index 4efd9ee..13986e2 100644
+--- a/src/renderer.rs
++++ b/src/renderer.rs
+@@ -1,5 +1,5 @@
+ use crate::mesh::{ChaperoneMesh, ChaperoneVertex};
+-use anyhow::{bail, Result};
++use anyhow::{Result, bail};
+ use ash::vk;
+ use bytemuck::{Pod, Zeroable};
+ use glam::Mat4;
+@@ -9,8 +9,6 @@ use glam::Mat4;
+ #[derive(Copy, Clone, Pod, Zeroable)]
+ struct PushConstants {
+     view_proj: [[f32; 4]; 4],
+-    colour: [f32; 4],
+-    opacity: f32,
+-    line_width: f32,
+-    grid_spacing: f32,
++    devices: [[f32; 4]; 3],
++    params: [f32; 4],
+ }
+@@ -389,10 +387,8 @@ impl ChaperoneRenderer {
+         framebuffer: vk::Framebuffer,
+         extent: vk::Extent2D,
+         view_proj: Mat4,
+-
+-        // TODO: I should probably group these params into a struct..
+-        opacity: f32,
+-        colour: [f32; 4],
++        devices: [[f32; 4]; 3],
+         line_width: f32,
+         grid_spacing: f32,
++        danger: f32,
+     ) -> Result<vk::CommandBuffer> {
+@@ -442,7 +438,5 @@ impl ChaperoneRenderer {
+         let pc = PushConstants {
+             view_proj: view_proj.to_cols_array_2d(),
+-            colour,
+-            opacity,
+-            line_width,
+-            grid_spacing,
++            devices,
++            params: [line_width, grid_spacing, danger, 0.0],
+         };
+diff --git a/src/ui.rs b/src/ui.rs
+index 0e62aed..bb66d09 100644
+--- a/src/ui.rs
++++ b/src/ui.rs
+@@ -106,5 +106,7 @@ impl SettingsEdit {
+             grid_spacing: self.grid_spacing,
+             line_width: self.line_width,
+             grid_colour: [self.colour.r, self.colour.g, self.colour.b, self.colour.a],
++            local_radius: base.local_radius,
++            danger_distance: base.danger_distance,
+ 
+             boundary: base.boundary.clone(),
+diff --git a/src/xr_session.rs b/src/xr_session.rs
+index 7beb15c..d7fbe54 100644
+--- a/src/xr_session.rs
++++ b/src/xr_session.rs
+@@ -200,4 +200,5 @@ impl XrContext {
+         // To add 'Simple' support back, include:
+         // "/interaction_profiles/khr/simple_controller",
+         let profiles = [
++            "/interaction_profiles/mndx/pssense_controller_mndx",
+             "/interaction_profiles/oculus/touch_controller",
+diff --git a/src/xr_thread.rs b/src/xr_thread.rs
+index 4ea3723..f777346 100644
+--- a/src/xr_thread.rs
++++ b/src/xr_thread.rs
+@@ -3,5 +3,5 @@ use std::sync::Arc;
+ use anyhow::{Context, Result};
+ use ash::vk;
+ use ash::vk::Handle;
+-use glam::{Mat4, Vec2};
++use glam::{Mat4, Vec2, Vec3};
+ use openxr as xr;
+@@ -319,9 +319,15 @@ fn xr_main(state: Arc<Mutex<AppState>>, mut cfg: Config) -> Result<()> {
+-                let proximity_positions: Vec<glam::Vec3> =
++                let proximity_positions: Vec<Vec3> =
+                     [&xr.head_space, &xr.right_space, &xr.left_space]
+                         .iter()
+                         .filter_map(|space| space.locate(&xr.stage, display_time).ok())
++                        .filter(|loc| {
++                            loc.location_flags.contains(
++                                xr::SpaceLocationFlags::POSITION_VALID
++                                    | xr::SpaceLocationFlags::POSITION_TRACKED,
++                            )
++                        })
+                         .map(|loc| {
+                             let p = loc.pose.position;
+-                            glam::Vec3::new(p.x, p.y, p.z)
++                            Vec3::new(p.x, p.y, p.z)
+                         })
+                         .collect();
+@@ -336,4 +342,13 @@ fn xr_main(state: Arc<Mutex<AppState>>, mut cfg: Config) -> Result<()> {
+                     cfg.fade_end,
+                 );
++                let danger =
++                    boundary::danger_factor(&polygon, &proximity_positions, cfg.danger_distance);
++                let mut devices = [[1.0e10_f32; 4]; 3];
++                for (slot, position) in devices.iter_mut().zip(proximity_positions.iter()) {
++                    slot[..3].copy_from_slice(&position.to_array());
++                }
++                devices[0][3] = cfg.fade_start;
++                devices[1][3] = cfg.fade_end;
++                devices[2][3] = cfg.local_radius;
+ 
+                 let (flags, views) = xr.session.locate_views(
+@@ -374,7 +389,7 @@ fn xr_main(state: Arc<Mutex<AppState>>, mut cfg: Config) -> Result<()> {
+                             eye_sc.extent,
+                             mvp,
+-                            opacity,
+-                            cfg.grid_colour,
++                            devices,
+                             cfg.line_width,
+                             cfg.grid_spacing,
++                            danger,
+                         )?

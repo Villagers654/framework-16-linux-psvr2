@@ -11,7 +11,9 @@ The finished experience is deliberately console-like:
 3. The headset opens directly to a filtered grid of installed Steam VR games.
 4. **PSVR2 Room Setup** is in that grid beside the games.
 5. Point, pull the trigger, and play.
-6. The PSVR2 Room Setup boundary is imported into the visual warning overlay.
+6. The PSVR2 Room Setup boundary becomes an Oculus-style proximity warning:
+   only the nearby section appears, grows opaque on approach, and turns red at
+   the danger margin.
 
 The tested default is **120 Hz** at Monado's **170% compositor scale**, which
 reports a distortion-corrected recommendation of **3400×3468 per eye** on this
@@ -29,7 +31,7 @@ PSVR2. Per-game Steam resolution overrides remain available.
 | PSVR2 Toolkit + Ignition | **Linux PSVR2** | Runs Sony's SteamVR driver through Proton and exposes it to Linux VR runtimes. |
 | Supremium Monado + xrizer | **Linux PSVR2** | Supplies OpenXR and translates OpenVR games without relying on SteamVR's compositor. |
 | WayVR launcher patches | **Linux PSVR2** | Opens a VR-only game grid, launches explicit VR modes, and binds native Sense controls. |
-| xr-chaperone | **Linux OpenXR** | Provides Oculus-style visual boundary warnings from your PSVR2 play area in a separate overlay process. |
+| xr-chaperone | **Linux OpenXR** | Provides localized HMD/controller proximity warnings from your PSVR2 play area in a separate overlay process. |
 | [RiftLift](https://github.com/Villagers654/RiftLift) | **Optional Meta Rift games** | Installs and launches owned Rift titles through maintained ReviveXR and Monado integration. |
 | `bluetooth.disable_ertm=1` | **Linux / controller-specific** | Compatibility workaround for Sense Bluetooth pairing; try without it first on current kernels. |
 | `amdgpu.dcdebugmask=0xc10` | **AMD-specific, experimental** | The exact setting used on the tested machine to stabilize direct-display/DRM behavior. Do not apply on Intel/NVIDIA. |
@@ -178,7 +180,8 @@ required.
   clients after relocalization instead of leaving them attached to stale STAGE
   coordinates.
 - Run **PSVR2 Room Setup** once; its polygon automatically supplies
-  xr-chaperone's warning walls and fade geometry.
+  xr-chaperone's warning geometry. Only the section nearest the HMD or either
+  tracked controller fades in, and the final 12 cm transitions to red.
 - Warning geometry is visual-only and does not hard-block movement.
 - Set `PSVR2_CHAPERONE_ENABLE=0` in `settings.env` to disable the overlay.
 - Press either PS button: show or hide the WayVR dashboard.

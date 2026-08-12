@@ -81,6 +81,10 @@ defaults = {
     "grid_spacing": 0.4,
     "line_width": 0.01,
     "grid_colour": [0.0, 0.6, 1.0, 1.0],
+    # Localize the warning around the nearest HMD/controller and reserve the
+    # final margin for an Oculus-style red danger transition.
+    "local_radius": 0.8,
+    "danger_distance": 0.12,
 }
 if target.exists():
     try:
@@ -100,6 +104,8 @@ lines = [
     f"grid_spacing = {float(defaults['grid_spacing']):.6g}",
     f"line_width = {float(defaults['line_width']):.6g}",
     "grid_colour = [" + ", ".join(f"{float(v):.6g}" for v in defaults["grid_colour"]) + "]",
+    f"local_radius = {float(defaults['local_radius']):.6g}",
+    f"danger_distance = {float(defaults['danger_distance']):.6g}",
     "",
 ]
 for x, z in boundary:

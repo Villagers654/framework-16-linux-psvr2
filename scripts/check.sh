@@ -95,6 +95,8 @@ bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
   "$work_dir/chaperone.toml"
 test "$(grep -c '^\[\[boundary\]\]$' "$work_dir/chaperone.toml")" = 4
 grep -Fxq 'fade_start = 0.45' "$work_dir/chaperone.toml"
+grep -Fxq 'local_radius = 0.8' "$work_dir/chaperone.toml"
+grep -Fxq 'danger_distance = 0.12' "$work_dir/chaperone.toml"
 python3 -c 'import sys,tomllib; tomllib.load(open(sys.argv[1], "rb"))' \
   "$work_dir/chaperone.toml"
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone-offset.vrchap \
@@ -125,6 +127,9 @@ PY
 for patch in patches/*.patch; do
   git apply --stat "$patch" >/dev/null
 done
+grep -Fq 'pssense_controller_mndx' patches/xr-chaperone-proximity-warning.patch
+grep -Fq 'danger_factor' patches/xr-chaperone-proximity-warning.patch
+grep -Fq 'pack_colour' patches/xr-chaperone-configurable-colour.patch
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only src/psvr2-screenshot-listener.c
 PSVR2_TRACKING_LOG_TEXT=$'TrackingStatus searching -> stable\nforce 3DoF OFF\nfake Position OFF\nMap latched\n(playarea: 1, map latch: 1)\nmap registration error 1 -> 0' \
   bash -c 'source lib/psvr2-common.sh; psvr2_tracking_is_stable 1'
