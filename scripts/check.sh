@@ -77,6 +77,20 @@ PSVR2_USBRESET_BIN="$repo/tests/fixtures/usbreset" \
 PSVR2_USB_RESET_SKIP_RUNTIME_CHECK=1 \
 PSVR2_USBRESET_LOG="$usb_reset_log" bin/psvr2-usb-reset
 grep -Fxq '002/012' "$usb_reset_log"
+install -d "$usb_reset_root/2-1"
+printf '054c' > "$usb_reset_root/2-1/idVendor"
+printf '0cde' > "$usb_reset_root/2-1/idProduct"
+printf '5000' > "$usb_reset_root/2-1/speed"
+printf '13' > "$usb_reset_root/2-1/bNumInterfaces"
+printf '2' > "$usb_reset_root/2-1/busnum"
+printf '14' > "$usb_reset_root/2-1/devnum"
+: > "$usb_reset_log"
+PSVR2_USB_ROOT="$usb_reset_root" \
+PSVR2_USBRESET_BIN="$repo/tests/fixtures/usbreset" \
+PSVR2_USB_RESET_SKIP_RUNTIME_CHECK=1 \
+PSVR2_USBRESET_LOG="$usb_reset_log" bin/psvr2-usb-reset
+grep -Fxq '002/012' "$usb_reset_log"
+grep -Fxq '002/014' "$usb_reset_log"
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
   "$work_dir/chaperone.toml"
 test "$(grep -c '^\[\[boundary\]\]$' "$work_dir/chaperone.toml")" = 4

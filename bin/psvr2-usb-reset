@@ -37,12 +37,22 @@ for _ in $(seq 1 10); do
         devices+=("$(printf '%03d/%03d' "$((10#$busnum))" "$((10#$devnum))")")
     done
 
-    if (( ${#devices[@]} == 1 )) && "$usbreset_bin" "${devices[0]}"; then
-        echo "Reset PSVR2 USB function ${devices[0]}."
+    reset_devices=()
+    for device in "${devices[@]}"; do
+        # A wedged xHCI path can briefly expose the same physical headset at
+        # both its old and new addresses. Reset every matching PSVR2 function:
+        # the stale address may disappear while iterating, but one successful
+        # reset is enough to recover the live function.
+        if "$usbreset_bin" "$device"; then
+            reset_devices+=("$device")
+        fi
+    done
+    if (( ${#reset_devices[@]} > 0 )); then
+        echo "Reset PSVR2 USB function(s): ${reset_devices[*]}."
         exit 0
     fi
     sleep 0.5
 done
 
-echo "Could not reset one fully enumerated PSVR2 USB function" >&2
+echo "Could not reset any fully enumerated PSVR2 USB function" >&2
 exit 1
