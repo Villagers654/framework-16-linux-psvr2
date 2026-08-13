@@ -15,10 +15,6 @@ The finished experience is deliberately console-like:
    only the nearby section appears, grows opaque on approach, and turns red at
    the danger margin.
 
-A USB-attached Quest Pro can coexist through WiVRn. Each headset claims the
-active OpenXR runtime only for its own session, so unplugging Quest restores the
-normal PSVR2 autostart path without replacing its runtime or room calibration.
-
 The tested default is **120 Hz** at Monado's **170% compositor scale**, which
 reports a distortion-corrected recommendation of **3400×3468 per eye** on this
 PSVR2. Per-game Steam resolution overrides remain available.

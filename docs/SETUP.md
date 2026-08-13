@@ -132,23 +132,7 @@ unrestricted space:
 perl -i -pe 's/^PSVR2_CHAPERONE_ENABLE=.*/PSVR2_CHAPERONE_ENABLE=0/' ~/.config/psvr2-linux/settings.env
 ```
 
-## 6. Optional Quest Pro over WiVRn
-
-Install WiVRn from Flathub on the PC and from the Meta Quest Store on the
-headset. The Quest Pro USB connection is monitored independently from PSVR2:
-
-```bash
-flatpak install --user flathub io.github.wivrn.wivrn
-quest-wivrn-start
-```
-
-Open WiVRn in the headset and pair it with the PIN shown by the PC dashboard.
-With USB debugging authorized, the dashboard automatically selects the wired
-5 Gb/s connection. Unplugging Quest stops WiVRn and restores the prior OpenXR
-runtime; reconnecting PSVR2 retains its existing room calibration and starts
-the original Monado + WayVR stack.
-
-## 7. Optional Meta Rift games
+## 6. Optional Meta Rift games
 
 Meta/Revive compatibility is maintained independently by RiftLift. This
 repository does not patch Meta, Revive, or Rift game launch behavior. Install
