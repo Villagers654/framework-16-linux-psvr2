@@ -70,4 +70,5 @@ if [[ "${PSVR2_DISCONNECT_CONTROLLERS:-0}" == "1" ]] && \
 fi
 [[ ! -x "$runtime_preflight" ]] || "$runtime_preflight" || true
 [[ ! -x "$audio_helper" ]] || "$audio_helper" restore || true
+[[ ! -x "$helper_dir/psvr2-runtime-select" ]] || "$helper_dir/psvr2-runtime-select" release || true
 echo "PSVR2 runtime stopped."

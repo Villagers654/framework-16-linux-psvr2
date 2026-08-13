@@ -1,0 +1,12 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+flatpak info io.github.wivrn.wivrn >/dev/null 2>&1 || {
+    echo "WiVRn is not installed. Install io.github.wivrn.wivrn from Flathub." >&2
+    exit 1
+}
+if systemctl --user is-active --quiet psvr2-fossvr.service; then
+    PSVR2_AUTOMATED_STOP=1 "$HOME/.local/bin/psvr2-fossvr-stop"
+fi
+systemctl --user start quest-wivrn-dashboard.service
+echo "Quest WiVRn dashboard started."

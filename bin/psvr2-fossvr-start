@@ -80,6 +80,7 @@ start_optional_services() {
 
 if systemctl --user is-active --quiet psvr2-fossvr.service \
     && [[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket"; then
+    "$helper_dir/psvr2-runtime-select" acquire
     start_optional_services
     "$audio_helper" vr || true
     if (( tracking_ready )); then
@@ -97,6 +98,16 @@ fi
 assert_monado_profile_supports_psvr2
 assert_monado_binary_has_psvr2_builder
 "$helper_dir/psvr2-restore-calibration"
+"$helper_dir/psvr2-runtime-select" acquire
+runtime_claimed=1
+release_runtime_on_error() {
+    local status=$?
+    if (( status != 0 && runtime_claimed )); then
+        "$helper_dir/psvr2-runtime-select" release || true
+    fi
+    exit "$status"
+}
+trap release_runtime_on_error ERR
 
 rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/psvr2-autostart-suppressed"
 
@@ -188,6 +199,7 @@ if (( ! runtime_healthy )); then
     fi
     journalctl --user -u psvr2-fossvr.service -n 80 --no-pager >&2
     systemctl --user stop psvr2-fossvr.service || true
+    "$helper_dir/psvr2-runtime-select" release || true
     exit 1
 fi
 
@@ -202,3 +214,4 @@ if (( tracking_ready )); then
 else
     echo "PSVR2 dashboard ready: ${PSVR2_RENDER_SCALE}% render scale; room tracking is still relocalizing."
 fi
+trap - ERR

@@ -1,0 +1,7 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+flatpak run --command=wivrnctl io.github.wivrn.wivrn disconnect 2>/dev/null || true
+flatpak run --command=wivrnctl io.github.wivrn.wivrn stop-server 2>/dev/null || true
+systemctl --user stop quest-wivrn-dashboard.service 2>/dev/null || true
+echo "Quest WiVRn stopped; its previous OpenXR runtime was restored."

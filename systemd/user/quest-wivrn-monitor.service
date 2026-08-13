@@ -1,0 +1,12 @@
+[Unit]
+Description=Start and stop WiVRn with a USB-attached Quest Pro
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bash %h/.local/bin/quest-wivrn-monitor
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

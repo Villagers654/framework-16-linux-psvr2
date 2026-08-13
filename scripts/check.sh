@@ -130,6 +130,20 @@ done
 grep -Fq 'pssense_controller_mndx' patches/xr-chaperone-proximity-warning.patch
 grep -Fq 'danger_factor' patches/xr-chaperone-proximity-warning.patch
 grep -Fq 'pack_colour' patches/xr-chaperone-configurable-colour.patch
+
+runtime_test="$work_dir/runtime-select"
+mkdir -p "$runtime_test/config/openxr/1" "$runtime_test/run"
+printf '{"runtime":"previous"}\n' > "$runtime_test/previous.json"
+printf '{"runtime":"psvr2"}\n' > "$runtime_test/psvr2.json"
+ln -s "$runtime_test/previous.json" "$runtime_test/config/openxr/1/active_runtime.json"
+XDG_CONFIG_HOME="$runtime_test/config" XDG_RUNTIME_DIR="$runtime_test/run" \
+  bin/psvr2-runtime-select acquire "$runtime_test/psvr2.json"
+test "$(readlink -f "$runtime_test/config/openxr/1/active_runtime.json")" = "$(readlink -f "$runtime_test/psvr2.json")"
+XDG_CONFIG_HOME="$runtime_test/config" XDG_RUNTIME_DIR="$runtime_test/run" \
+  bin/psvr2-runtime-select release "$runtime_test/psvr2.json"
+test "$(readlink -f "$runtime_test/config/openxr/1/active_runtime.json")" = "$(readlink -f "$runtime_test/previous.json")"
+grep -Fq '2833' bin/quest-wivrn-monitor
+grep -Fq '5010' bin/quest-wivrn-monitor
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only src/psvr2-screenshot-listener.c
 PSVR2_TRACKING_LOG_TEXT=$'TrackingStatus searching -> stable\nforce 3DoF OFF\nfake Position OFF\nMap latched\n(playarea: 1, map latch: 1)\nmap registration error 1 -> 0' \
   bash -c 'source lib/psvr2-common.sh; psvr2_tracking_is_stable 1'
