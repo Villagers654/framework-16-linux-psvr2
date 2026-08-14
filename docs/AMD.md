@@ -12,8 +12,9 @@ The settings file forces Vulkan onto the GPU connected to PSVR2 using
 GPU selection produces copies, jitter, failed direct display, or a black HMD.
 
 Motion smoothing is disabled because the tested Linux path produced ghosting.
-The target is native 120 Hz; tune individual game quality when a title cannot
-hold the 8.33 ms frame budget rather than lowering the global headset default.
+The target is native 120 Hz at a 170% render target (3400×3468 per eye) for
+distortion-corrected image quality. Tune quality per game when a title cannot
+hold the 8.33 ms frame budget rather than lowering the global target.
 
 The RX 7700S sends PSVR2 audio over DisplayPort. PipeWire can briefly drop
 DisplayPort audio when a new stream joins its graph, so the Framework install
@@ -30,6 +31,7 @@ installer after `./scripts/build-envision-runtime.sh` because rebuilding
 replaces the file.
 
 The Framework helper also selects AMD's actual `VR` firmware power profile
-(not `COMPUTE`) and reserves 8 ms for compositor timewarp at 120 Hz. Override
-the latter with `PSVR2_COMPOSITOR_TIME_MS` only when measuring a different
-value on your GPU.
+(not `COMPUTE`) and wakes the compositor 8 ms before presentation at 120 Hz.
+On the tested AMD direct-display path, Monado's generic 3 ms fallback produced
+continuous one-frame-late misses even at low GPU utilization; the earlier wake
+eliminated that idle miss storm.

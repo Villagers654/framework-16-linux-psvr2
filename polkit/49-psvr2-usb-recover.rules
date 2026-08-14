@@ -5,6 +5,7 @@ polkit.addRule(function(action, subject) {
     var unit = action.lookup("unit");
     var verb = action.lookup("verb");
     if ((unit == "psvr2-usb-recover.service" && verb == "start") ||
+        (/^psvr2-monado-capability@[1-9][0-9]*[.]service$/.test(unit) && verb == "start") ||
         (unit == "psvr2-dgpu-power.service" && verb == "stop"))
         return polkit.Result.YES;
 });

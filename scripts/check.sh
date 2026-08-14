@@ -49,16 +49,20 @@ grep -Fq '"$lock_dir/monado_comp_ipc"' bin/psvr2-fossvr-stop
 grep -Fq 'systemctl --no-ask-password --no-block stop psvr2-dgpu-power.service' bin/psvr2-fossvr-stop
 grep -Fq 'unit == "psvr2-dgpu-power.service" && verb == "stop"' \
   polkit/49-psvr2-usb-recover.rules
+grep -Fq 'psvr2-monado-capability@' polkit/49-psvr2-usb-recover.rules
 grep -Fq 'ENV{PRODUCT}=="54c/cde/*"' udev/71-psvr2-dgpu-power.rules
 grep -Fq '"$usb_reset_helper"' bin/psvr2-autostart-monitor
 grep -Fq 'prime_usb_session' bin/psvr2-autostart-monitor
 grep -Fq 'psvr2-usb-recover.service' bin/psvr2-autostart-monitor
 grep -Fq 'PSVR2_AUTOMATED_STOP=1 "$stop_helper"' bin/psvr2-autostart-monitor
 ! grep -Fq 'wait_for_psvr2_tracking' bin/psvr2-fossvr-start
+grep -Fq 'seq 1 200' bin/psvr2-fossvr-start
 grep -Fq 'systemctl --user start psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-start
 grep -Fq 'if is_monado_failed "$service_pid"; then' bin/psvr2-fossvr-start
 grep -Fq 'tracking_established=1' bin/psvr2-autostart-monitor
 grep -Fq 'tracking_established && ! tracking_suspended' bin/psvr2-autostart-monitor
+grep -Fq 'CPUWeight=10000' systemd/user/psvr2-fossvr.service
+grep -Fq 'IOWeight=1000' systemd/user/psvr2-fossvr.service
 grep -Fq 'rsci->unorm_view,          // Preserve gamma-encoded bytes for the desktop mirror.' \
   patches/monado-spectator-mirror.patch
 ! grep -Fq '"$helper_dir/psvr2-stop-games"' bin/psvr2-autostart-monitor
@@ -176,6 +180,11 @@ if command -v systemd-analyze >/dev/null 2>&1; then
   install -Dm0644 systemd/system/psvr2-usb-recover.service \
     "$verify_root/etc/systemd/system/psvr2-usb-recover.service"
   systemd-analyze verify --root="$verify_root" psvr2-usb-recover.service
+  install -Dm0755 systemd/system/psvr2-monado-capability \
+    "$verify_root/usr/local/libexec/psvr2-monado-capability"
+  install -Dm0644 systemd/system/psvr2-monado-capability@.service \
+    "$verify_root/etc/systemd/system/psvr2-monado-capability@.service"
+  systemd-analyze verify --root="$verify_root" psvr2-monado-capability@1000.service
 fi
 
 ./scripts/verify-reconnect-cycle.sh

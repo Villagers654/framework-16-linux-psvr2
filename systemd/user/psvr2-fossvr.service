@@ -11,6 +11,11 @@ Restart=no
 RestartSec=2
 TimeoutStopSec=10
 KillMode=control-group
+# Keep the latency-sensitive compositor and tracking bridge ahead of ordinary
+# application cgroups without imposing unsafe CPU affinity or RT policy on the
+# proprietary tracking server.
+CPUWeight=10000
+IOWeight=1000
 
 [Install]
 WantedBy=default.target

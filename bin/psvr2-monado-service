@@ -2,6 +2,21 @@
 set -euo pipefail
 source "$HOME/.local/lib/psvr2-linux/common.sh"
 
+# AMD's compute compositor needs CAP_SYS_NICE for its high-priority Vulkan
+# queue. Runtime rebuilds replace the executable and silently discard file
+# capabilities, so ask the narrowly-scoped system helper to repair it before
+# every AMD session and then verify the result ourselves.
+monado_service="$MONADO_PREFIX/bin/monado-service"
+if [[ "$AMD_VULKAN_DEVICE" == 1002:* ]]; then
+    capability=$(getcap "$monado_service" 2>/dev/null || true)
+    if [[ "$capability" != *'cap_sys_nice=eip'* ]]; then
+        systemctl start "psvr2-monado-capability@$(id -u).service" 2>/dev/null || true
+        capability=$(getcap "$monado_service" 2>/dev/null || true)
+    fi
+    [[ "$capability" == *'cap_sys_nice=eip'* ]] ||
+        echo "WARN Monado lacks CAP_SYS_NICE; reinstall the PSVR2 system integration." >&2
+fi
+
 # Use Monado's Sony-driver bridge for complete HMD and Sense optical tracking.
 # This loads the driver through Ignition; it does not launch Valve's SteamVR runtime.
 export STEAMVR_LH_ENABLE=true
@@ -58,8 +73,9 @@ fi
 export XRT_COMPOSITOR_FORCE_VK_DISPLAY=0
 export XRT_COMP_FRAME_LAG_LOG_AS_LEVEL=warn
 export U_PACING_APP_USE_MIN_FRAME_PERIOD=1
-# Reserve enough of each 8.34 ms frame for AMD timewarp/reprojection. Monado's
-# 4 ms default can miss the 120 Hz deadline under otherwise-manageable load.
+# PSVR2's AMD direct-display path needs an earlier wake than Monado's generic
+# 3 ms fallback at 120 Hz. Without this, the compositor repeatedly lands one
+# full 8.34 ms frame late even at low GPU utilization.
 export U_PACING_COMP_MIN_TIME_MS="${PSVR2_COMPOSITOR_TIME_MS:-8}"
 export XRT_NO_STDIN=1
 export IPC_EXIT_ON_DISCONNECT=OFF
@@ -71,4 +87,4 @@ if [[ -n "$DGPU_PCI_ADDRESS" ]]; then
     export DRI_PRIME="pci-${DGPU_PCI_ADDRESS//:/_}"
     export DRI_PRIME="${DRI_PRIME//./_}"
 fi
-exec "$MONADO_PREFIX/bin/monado-service"
+exec "$monado_service"

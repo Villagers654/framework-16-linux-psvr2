@@ -1,0 +1,21 @@
+[Unit]
+Description=Restore Monado realtime capability for UID %i
+Documentation=https://wiki.vronlinux.org/docs/fossvr/monado/
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/psvr2-monado-capability %i
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_SETFCAP
+NoNewPrivileges=false
+PrivateDevices=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native

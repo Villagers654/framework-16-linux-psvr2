@@ -49,11 +49,11 @@ check grep -Fq 'PromoteManifest' "$repo/patches/wayvr-launch-recency.patch"
 check grep -Fq 'SendGlobalKey XF86AudioRaiseVolume' "$repo/patches/wayvr-watch-volume-controls.patch"
 check bash -c 'bash "$1"' _ "$repo/scripts/verify-haptics.sh"
 monado_service="$HOME/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
-if ! getcap "$monado_service" | grep -Fq 'cap_sys_nice=eip'; then
-  echo "WARN monado-service lacks optional cap_sys_nice; run sudo ./install.sh --system for realtime scheduling"
-fi
+check bash -c 'getcap "$1" | grep -Fq "cap_sys_nice=eip"' _ "$monado_service"
 check grep -Fq 'U_PACING_COMP_MIN_TIME_MS' "$HOME/.local/bin/psvr2-monado-service"
 check test "$PSVR2_RENDER_SCALE" = 170
+check bash -c '[[ "$(systemctl --user show psvr2-fossvr.service -p CPUWeight --value)" == 10000 ]]'
+check bash -c '[[ "$(systemctl --user show psvr2-fossvr.service -p IOWeight --value)" == 1000 ]]'
 check python3 -m json.tool "$HOME/.local/share/psvr2-setup/unity-setup/PSVR2Toolkit.UnitySetup_Data/StreamingAssets/SteamVR/bindings_oculus_touch.json" >/dev/null
 check systemctl --user is-enabled --quiet psvr2-autostart-monitor.service
 check systemctl --user is-enabled --quiet psvr2-steam-vr-sync.path

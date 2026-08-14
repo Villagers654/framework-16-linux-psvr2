@@ -1,0 +1,32 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+[[ ${1:-} =~ ^[1-9][0-9]*$ ]] || {
+    echo "Expected a non-root numeric UID." >&2
+    exit 2
+}
+
+target_uid=$1
+target_home=$(getent passwd "$target_uid" | cut -d: -f6)
+[[ -n "$target_home" && -d "$target_home" ]] || {
+    echo "No home directory found for UID $target_uid." >&2
+    exit 1
+}
+
+monado_service="$target_home/.local/share/envision/prefixes/psvr2-toolkit-monado/bin/monado-service"
+[[ -f "$monado_service" && -x "$monado_service" ]] || {
+    echo "Monado service was not found for UID $target_uid." >&2
+    exit 1
+}
+[[ $(stat -c '%u' "$monado_service") == "$target_uid" ]] || {
+    echo "Refusing to modify a Monado binary not owned by UID $target_uid." >&2
+    exit 1
+}
+mode=$(stat -c '%a' "$monado_service")
+(( (8#$mode & 022) == 0 )) || {
+    echo "Refusing a group/world-writable Monado binary." >&2
+    exit 1
+}
+
+setcap CAP_SYS_NICE=eip "$monado_service"
+getcap "$monado_service" | grep -Fq 'cap_sys_nice=eip'

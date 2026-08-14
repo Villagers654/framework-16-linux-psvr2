@@ -112,7 +112,10 @@ systemctl --user reset-failed psvr2-fossvr.service psvr2-fossvr-wayvr.service 2>
 systemctl --user start psvr2-fossvr.service
 service_pid=$(systemctl --user show psvr2-fossvr.service -p MainPID --value)
 
-for _ in $(seq 1 100); do
+# Ignition can spend more than ten seconds initializing its Wine server after
+# a clean teardown. Keep the service health checks active while allowing the
+# socket the same realistic startup window as the proprietary driver.
+for _ in $(seq 1 200); do
     [[ -S "$socket" ]] && ss -H -xl | grep -Fq "$socket" && break
     if ! systemctl --user is-active --quiet psvr2-fossvr.service; then
         journalctl --user -u psvr2-fossvr.service -n 60 --no-pager >&2
