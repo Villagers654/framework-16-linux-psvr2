@@ -43,6 +43,8 @@ grep -Fq 'export OXR_PARALLEL_VIEWS=1' bin/psvr2-fossvr-run
 grep -Fq 'export OXR_NO_TEXTURE_SOURCE_ALPHA=1' bin/psvr2-fossvr-run
 grep -Fq 'export PULSE_SINK="$VR_AUDIO_SINK"' bin/psvr2-fossvr-run
 grep -Fq 'xaudio2_7=b' bin/psvr2-fossvr-run
+grep -Fq '"$audio_helper" vr' bin/psvr2-fossvr-run
+grep -Fq '"$audio_guard_helper" "$game_scope" "$VR_AUDIO_SINK"' bin/psvr2-fossvr-run
 ! grep -Fq 'systemctl --user stop psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
 grep -Fq '! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
 grep -Fq 'game_stop_helper="$helper_dir/psvr2-stop-games"' bin/psvr2-fossvr-stop
@@ -69,6 +71,7 @@ grep -Fq 'rsci->unorm_view,          // Preserve gamma-encoded bytes for the des
 ! grep -Fq '"$helper_dir/psvr2-stop-games"' bin/psvr2-autostart-monitor
 ! grep -Fq 'systemctl --user stop psvr2-fossvr-wayvr.service psvr2-chaperone.service' bin/psvr2-autostart-monitor
 bash -n bin/psvr2-stop-games
+scripts/test-game-audio-guard.sh
 usb_reset_root="$work_dir/usb-reset"
 usb_reset_log="$work_dir/usb-reset.log"
 install -d "$usb_reset_root/2-2.3"

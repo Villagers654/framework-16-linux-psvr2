@@ -1,0 +1,82 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+scope=${1:-}
+sink=${2:-}
+[[ "$scope" == psvr2-game-*.scope && -n "$sink" ]] || {
+    echo "Usage: psvr2-game-audio-guard psvr2-game-ID.scope SINK" >&2
+    exit 2
+}
+
+systemctl_bin=${PSVR2_SYSTEMCTL_BIN:-systemctl}
+pactl_bin=${PSVR2_PACTL_BIN:-pactl}
+cgroup_root=${PSVR2_CGROUP_ROOT:-/sys/fs/cgroup}
+declare -A normalized=()
+
+scope_is_active() {
+    [[ "${PSVR2_AUDIO_GUARD_ONCE:-0}" == 1 ]] ||
+        "$systemctl_bin" --user is-active --quiet "$scope"
+}
+
+scope_processes() {
+    local control_group
+    control_group=$("$systemctl_bin" --user show "$scope" -p ControlGroup --value 2>/dev/null || true)
+    [[ "$control_group" == /* && "$control_group" != *..* ]] || return 1
+    [[ -r "$cgroup_root$control_group/cgroup.procs" ]] || return 1
+    cat "$cgroup_root$control_group/cgroup.procs"
+}
+
+normalize_streams() {
+    local processes target_index input pid current_sink muted key
+    processes=$(scope_processes) || return 0
+    target_index=$("$pactl_bin" -f json list sinks 2>/dev/null |
+        jq -r --arg sink "$sink" '.[] | select(.name == $sink) | .index' 2>/dev/null |
+        head -n 1)
+    [[ "$target_index" =~ ^[0-9]+$ ]] || return 0
+    while IFS=$'\t' read -r input pid current_sink muted; do
+        [[ "$input" =~ ^[0-9]+$ && "$pid" =~ ^[0-9]+$ ]] || continue
+        grep -Fxq "$pid" <<<"$processes" || continue
+        key="$input:$pid"
+
+        # PULSE_SINK handles the normal launch path. Reassert it here as an
+        # endpoint invariant for streams restored by Wine or WirePlumber after
+        # a device transition. Per-stream volume stays at unity; the WayVR
+        # watch controls the headset sink globally and remains authoritative.
+        if [[ "$current_sink" != "$target_index" ]]; then
+            "$pactl_bin" move-sink-input "$input" "$sink" >/dev/null 2>&1 || continue
+        fi
+        if [[ "$muted" == true ]]; then
+            "$pactl_bin" set-sink-input-mute "$input" 0 >/dev/null 2>&1 || continue
+        fi
+        if [[ -z "${normalized[$key]:-}" ]]; then
+            "$pactl_bin" set-sink-input-volume "$input" 100% >/dev/null 2>&1 || continue
+            normalized[$key]=1
+        fi
+    done < <(
+        "$pactl_bin" -f json list sink-inputs 2>/dev/null |
+            jq -r '.[] | [.index, .properties["application.process.id"], .sink, .mute] | @tsv' 2>/dev/null || true
+    )
+}
+
+for _ in $(seq 1 40); do
+    if scope_is_active && scope_processes >/dev/null; then
+        break
+    fi
+    sleep 0.05
+done
+scope_is_active || exit 0
+normalize_streams
+[[ "${PSVR2_AUDIO_GUARD_ONCE:-0}" != 1 ]] || exit 0
+
+# Subscribe instead of polling. If pipewire-pulse is restarted, pactl exits;
+# the outer loop reconnects and immediately normalizes any restored streams.
+while scope_is_active; do
+    while scope_is_active && IFS= read -r event; do
+        case "$event" in
+            *"sink"*) normalize_streams ;;
+        esac
+    done < <("$pactl_bin" subscribe 2>/dev/null || true)
+    scope_is_active || break
+    sleep 0.25
+    normalize_streams
+done

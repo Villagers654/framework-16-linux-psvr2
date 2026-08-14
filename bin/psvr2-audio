@@ -10,12 +10,13 @@ node_id() {
 }
 
 set_default_when_ready() {
-    local name=$1 id
+    local name=$1 unmute=${2:-0} id
     [[ -n "$name" ]] || return 0
     for _ in $(seq 1 50); do
         id=$(node_id "$name" || true)
         if [[ -n "$id" ]]; then
             wpctl set-default "$id"
+            [[ "$unmute" != 1 ]] || wpctl set-mute "$id" 0
             return 0
         fi
         sleep 0.2
@@ -26,10 +27,15 @@ set_default_when_ready() {
 
 case "${1:-}" in
     vr)
-        wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null |
+        current=$(wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null |
             sed -n 's/^[[:space:]]*\*\{0,1\}[[:space:]]*node.name = "\([^"]*\)"/\1/p' |
-            head -n 1 > "$state_file"
-        set_default_when_ready "$VR_AUDIO_SINK"
+            head -n 1)
+        # Repeated readiness checks must not replace the real desktop restore
+        # target with the PSVR2 sink itself.
+        if [[ -n "$current" && "$current" != "$VR_AUDIO_SINK" ]]; then
+            printf '%s\n' "$current" > "$state_file"
+        fi
+        set_default_when_ready "$VR_AUDIO_SINK" 1
         set_default_when_ready "$VR_AUDIO_SOURCE"
         ;;
     restore)

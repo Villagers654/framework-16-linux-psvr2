@@ -11,7 +11,11 @@ fi
 unset PSVR2_ROOM_SETUP_LAUNCH || true
 
 start_helper="${PSVR2_HELPER_DIR:-$HOME/.local/bin}/psvr2-fossvr-start"
-[[ -x "$start_helper" ]] || { echo "Required PSVR2 helper is missing or not executable: $start_helper" >&2; exit 1; }
+audio_helper="${PSVR2_HELPER_DIR:-$HOME/.local/bin}/psvr2-audio"
+audio_guard_helper="${PSVR2_HELPER_DIR:-$HOME/.local/bin}/psvr2-game-audio-guard"
+for helper in "$start_helper" "$audio_helper" "$audio_guard_helper"; do
+    [[ -x "$helper" ]] || { echo "Required PSVR2 helper is missing or not executable: $helper" >&2; exit 1; }
+done
 
 # WayVR is deliberately stopped while a VR title owns the compositor.  Its
 # absence therefore says nothing about Monado's health and must never trigger a
@@ -29,6 +33,11 @@ if [[ ! -S "$socket" ]] || ! ss -H -xl | grep -Fq "$socket"; then
     echo "Monado is active but its IPC socket is unavailable; repairing the runtime" >&2
     "$start_helper"
 fi
+
+# A running Monado service does not guarantee that the hot-plugged HDMI node
+# is ready or still selected. Make headset audio readiness part of every game
+# launch, including launches that do not need to start the runtime.
+"$audio_helper" vr
 if [[ ! -S "$socket" ]] || ! ss -H -xl | grep -Fq "$socket"; then
     echo "Monado IPC socket is unavailable: $socket" >&2
     exit 1
@@ -87,11 +96,16 @@ export MESA_VK_WSI_PRESENT_MODE=immediate
 
 game_pid=""
 runtime_watcher=""
+audio_guardian=""
 forward_signal() {
     [[ -n "$game_pid" ]] && kill -TERM -- "-$game_pid" 2>/dev/null || true
     systemctl --user stop --no-block "$game_scope" 2>/dev/null || true
 }
 cleanup() {
+    if [[ -n "$audio_guardian" ]]; then
+        kill "$audio_guardian" 2>/dev/null || true
+        wait "$audio_guardian" 2>/dev/null || true
+    fi
     if [[ -n "$runtime_watcher" ]]; then
         kill "$runtime_watcher" 2>/dev/null || true
         wait "$runtime_watcher" 2>/dev/null || true
@@ -120,6 +134,10 @@ registration_tmp="$game_registration.tmp"
 printf '%s %s %s\n' "$game_pid" "$(< /proc/sys/kernel/random/boot_id)" "$game_scope" > "$registration_tmp"
 chmod 0600 "$registration_tmp"
 mv -f -- "$registration_tmp" "$game_registration"
+if [[ -n "$VR_AUDIO_SINK" ]]; then
+    "$audio_guard_helper" "$game_scope" "$VR_AUDIO_SINK" &
+    audio_guardian=$!
+fi
 
 # If the headset monitor stops Monado because either cable disappears, end the
 # wrapped VR title as well instead of leaving Proton/Steam showing it as
