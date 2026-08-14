@@ -49,6 +49,14 @@ export OXR_ZERO_TIME_IS_NOW=1
 if [[ -n "$VR_AUDIO_SINK" ]]; then
     export PULSE_SINK="$VR_AUDIO_SINK"
 fi
+# Prefer Proton's maintained XAudio/FAudio implementations over stale native
+# DirectX redistributable DLLs that a game or prerequisite installer may have
+# copied into its prefix. Native XAudio can keep a Pulse stream alive while
+# submitting silence after an endpoint or session transition, and it does not
+# reliably reconnect after the server returns. Apply this by API family rather
+# than title so every translated VR game gets the reconnect-safe backend.
+xaudio_overrides="xaudio2_0=b;xaudio2_1=b;xaudio2_2=b;xaudio2_3=b;xaudio2_4=b;xaudio2_5=b;xaudio2_6=b;xaudio2_7=b;xaudio2_8=b;xaudio2_9=b"
+export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}$xaudio_overrides"
 # Present parallel application views on canted-display headsets such as PSVR2.
 # Some engines build their projection or UI culling around parallel cameras;
 # Monado applies the physical cant again in the compositor.  This Monado-only

@@ -42,6 +42,7 @@ grep -Fq 'game_registration="$game_registry_dir/$BASHPID"' bin/psvr2-fossvr-run
 grep -Fq 'export OXR_PARALLEL_VIEWS=1' bin/psvr2-fossvr-run
 grep -Fq 'export OXR_NO_TEXTURE_SOURCE_ALPHA=1' bin/psvr2-fossvr-run
 grep -Fq 'export PULSE_SINK="$VR_AUDIO_SINK"' bin/psvr2-fossvr-run
+grep -Fq 'xaudio2_7=b' bin/psvr2-fossvr-run
 ! grep -Fq 'systemctl --user stop psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
 grep -Fq '! systemctl --user is-active --quiet psvr2-fossvr-wayvr.service' bin/psvr2-fossvr-run
 grep -Fq 'game_stop_helper="$helper_dir/psvr2-stop-games"' bin/psvr2-fossvr-stop
