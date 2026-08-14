@@ -76,7 +76,7 @@ defaults = {
     # Begin the localized warning early enough to react to an approaching hand
     # before it reaches the edge. Existing user-tuned values remain
     # authoritative below.
-    "fade_start": 0.8,
+    "fade_start": 0.625,
     "fade_end": 0.0,
     "wall_height": 2.5,
     "grid_spacing": 0.4,
@@ -84,7 +84,7 @@ defaults = {
     "grid_colour": [0.0, 0.6, 1.0, 1.0],
     # Localize the warning around the nearest HMD/controller and reserve the
     # final margin for an Oculus-style red danger transition.
-    "local_radius": 1.2,
+    "local_radius": 1.0,
     "danger_distance": 0.12,
 }
 if target.exists():

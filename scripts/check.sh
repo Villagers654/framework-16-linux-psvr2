@@ -94,8 +94,8 @@ grep -Fxq '002/014' "$usb_reset_log"
 bin/psvr2-import-boundary tests/fixtures/psvr2-chaperone.vrchap \
   "$work_dir/chaperone.toml"
 test "$(grep -c '^\[\[boundary\]\]$' "$work_dir/chaperone.toml")" = 4
-grep -Fxq 'fade_start = 0.8' "$work_dir/chaperone.toml"
-grep -Fxq 'local_radius = 1.2' "$work_dir/chaperone.toml"
+grep -Fxq 'fade_start = 0.625' "$work_dir/chaperone.toml"
+grep -Fxq 'local_radius = 1' "$work_dir/chaperone.toml"
 grep -Fxq 'danger_distance = 0.12' "$work_dir/chaperone.toml"
 python3 -c 'import sys,tomllib; tomllib.load(open(sys.argv[1], "rb"))' \
   "$work_dir/chaperone.toml"

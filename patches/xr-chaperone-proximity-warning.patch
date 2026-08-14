@@ -195,7 +195,7 @@ index e798fe4..24ae9b3 100644
      [0.0, 0.6, 1.0, 1.0]
  }
 +fn default_local_radius() -> f32 {
-+    1.2
++    1.0
 +}
 +fn default_danger_distance() -> f32 {
 +    0.12

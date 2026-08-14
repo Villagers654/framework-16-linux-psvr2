@@ -111,8 +111,8 @@ poses are ignored.
 The generated defaults can be tuned without retracing the room:
 
 ```toml
-fade_start = 0.8        # first warning distance, metres
-local_radius = 1.2      # length of the localized warning patch
+fade_start = 0.625      # first warning distance, metres
+local_radius = 1.0      # length of the localized warning patch
 danger_distance = 0.12 # red-warning margin
 ```
 
