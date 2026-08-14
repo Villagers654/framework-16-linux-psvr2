@@ -181,7 +181,8 @@ required.
   coordinates.
 - Run **PSVR2 Room Setup** once; its polygon automatically supplies
   xr-chaperone's warning geometry. Only the section nearest the HMD or either
-  tracked controller fades in, and the final 12 cm transitions to red.
+  tracked controller fades in from 80 cm away, and the final 12 cm transitions
+  to red.
 - Warning geometry is visual-only and does not hard-block movement.
 - Set `PSVR2_CHAPERONE_ENABLE=0` in `settings.env` to disable the overlay.
 - Press either PS button: show or hide the WayVR dashboard.
