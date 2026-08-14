@@ -40,6 +40,15 @@ export XR_RUNTIME_JSON="$MONADO_PREFIX/share/openxr/1/openxr_monado.json"
 export VR_OVERRIDE="${VR_OVERRIDE:-$ENVISION_PROFILE_ROOT/riftlift/components/xrizer/target/release}"
 export PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1
 export OXR_ZERO_TIME_IS_NOW=1
+# PipeWire/WirePlumber can remember an application's previous virtual sink
+# even after the PSVR2 output becomes the session default. Pulse-compatible
+# applications, including Proton/Wine games, treat PULSE_SINK as an explicit
+# route and therefore cannot be pulled back into a stale or silent effects
+# sink. Keep this conditional so installations without a configured headset
+# audio device retain normal desktop routing.
+if [[ -n "$VR_AUDIO_SINK" ]]; then
+    export PULSE_SINK="$VR_AUDIO_SINK"
+fi
 # Present parallel application views on canted-display headsets such as PSVR2.
 # Some engines build their projection or UI culling around parallel cameras;
 # Monado applies the physical cant again in the compositor.  This Monado-only

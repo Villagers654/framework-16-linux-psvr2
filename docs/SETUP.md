@@ -32,6 +32,10 @@ checks every required PSVR2 feature, and rejects unresolved runtime libraries.
 The Envision profile has source pulling disabled, so opening Envision cannot
 silently replace those sources.
 
+On the Framework 16 profile, wrapped VR games explicitly request the configured
+`VR_AUDIO_SINK`. This prevents remembered Easy Effects or per-application
+routes from silently diverting game audio away from the headset.
+
 Build and install the patched dashboard:
 
 ```bash
